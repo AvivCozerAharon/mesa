@@ -33,6 +33,12 @@ validador e não vai pra tela.
 | notícias | Google News RSS por termo de busca de cada posição + feeds | contínuo |
 | IA | OpenAI (modelo por env), saída JSON validada | por briefing |
 
+## Interface
+
+Uma página (`mesa/static/index.html`, sem framework): faixa macro, carteira com o veredito de tese por
+posição, gráfico com preço médio e média de 200, números, briefing e tese editável (com histórico),
+notícias, gatilhos, painel "Hoje" e operação. `j`/`k` navega. Em produção: http://<ec2>:8100 (senha única).
+
 ## Rodar
 
 ```bash
@@ -75,3 +81,16 @@ coluna `busca` = termos de notícia, ex.: `PETR4;Petrobras`). Docker: `docker co
 7. Notícia repetida não era recasada quando a carteira ganhava termos novos: dedupe passou a recasar.
 8. Reexecutar o job no mesmo dia chamava a IA de novo porque a entrada trazia só os gatilhos "novos
    da rodada"; agora traz os disparos do dia — reexecução é de graça.
+9. `.env` copiado do Windows com CRLF (e uma aspa solta): a chave chegava ao container com `"` no
+   fim e a OpenAI devolvia 401. O job registrou o erro por posição e seguiu; `sed 's/$//'` resolveu.
+
+## Limites conhecidos
+
+- **"Tese continua?" é uma leitura, não uma medição.** Mesma carteira, mesmo dia, conjuntos de notícias
+  coletados em horas diferentes deram vereditos diferentes para VOO e PETR4. O que é estável: o
+  validador (100 % das saídas obedeceram ao contrato) e os fatos numéricos. Por isso a justificativa
+  sempre vem com as citações — o usuário confere em 10 segundos.
+- Yahoo é não oficial; B3 é atrasada 15 min; fundos D+1/D+2; lâmina cobre poucos fundos (taxa fica "sem lâmina").
+- Notícias só por título (Google News RSS); termos de nicho trazem itens antigos, que a janela de 7 dias descarta.
+- Um usuário, uma senha; sem multiusuário.
+
