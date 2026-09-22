@@ -112,6 +112,22 @@ DESCRICOES = {"queda_desde_compra": "caiu {limite} % ou mais desde a compra", "q
               "fundo_pct_bench_12m": "fundo abaixo de {limite} % do benchmark em 12 m", "fundo_resgate": "resgates de {limite} % do PL em 6 m"}
 
 
+PADROES_PARAMS = {"queda_desde_compra": {"pct": 15}, "queda_1m": {"pct": 10}, "min_52s": {"tolerancia_pct": 1}, "max_52s": {"tolerancia_pct": 1},
+                  "vol_spike": {"fator": 2}, "drawdown": {"pct": 20}, "fundo_abaixo_bench": {"pct": 50}, "fundo_pct_bench_12m": {"pct": 90},
+                  "fundo_resgate": {"pct": 20}, "noticia_contem": {"termos": []}, "abaixo_mm50": {}, "abaixo_mm200": {}}
+
+
+def descrever(regra: str, params: dict, detalhe: dict | None = None) -> str:
+    """Texto humano da regra com os parametros efetivos (padrao + os do usuario + detalhe do disparo)."""
+    p = {**PADROES_PARAMS.get(regra, {}), **(params or {})}
+    p.setdefault("limite", p.get("pct"))
+    p.update(detalhe or {})
+    try:
+        return DESCRICOES.get(regra, regra).format(**p)
+    except (KeyError, IndexError):
+        return DESCRICOES.get(regra, regra)
+
+
 def garantir_padrao(db: Db, posicao_id: int) -> int:
     """Cria os gatilhos padrão de uma posição uma única vez (o usuário pode apagar depois)."""
     marca = db.con.execute("SELECT 1 FROM gatilhos WHERE posicao_id = ? AND regra = '__padrao__'", (posicao_id,)).fetchone()
@@ -132,7 +148,11 @@ def listar(db: Db, posicao_id: int | None = None) -> list[dict]:
     if posicao_id is not None:
         sql += " AND (posicao_id = ? OR posicao_id IS NULL)"
         args = (posicao_id,)
-    return [{**dict(r), "parametros": json.loads(r["parametros"])} for r in db.con.execute(sql + " ORDER BY id", args).fetchall()]
+    out = []
+    for r in db.con.execute(sql + " ORDER BY id", args).fetchall():
+        params = json.loads(r["parametros"])
+        out.append({**dict(r), "parametros": params, "descricao": descrever(r["regra"], params)})
+    return out
 
 
 def criar(db: Db, posicao_id: int | None, regra: str, parametros: dict) -> int:
@@ -174,7 +194,7 @@ def avaliar(db: Db, posicao_id: int, metricas: dict | None, noticias: list[dict]
         if cur.rowcount:
             novos.append({"id": cur.lastrowid, "gatilho_id": g["id"], "posicao_id": posicao_id, "regra": g["regra"],
                           "parametros": g["parametros"], "detalhe": detalhe, "data": hoje.isoformat(),
-                          "descricao": DESCRICOES.get(g["regra"], g["regra"]).format(**{**g["parametros"], **detalhe})})
+                          "descricao": descrever(g["regra"], g["parametros"], detalhe)})
     db.con.commit()
     return novos
 
@@ -189,7 +209,7 @@ def pendentes(db: Db, incluir_vistos: bool = False) -> list[dict]:
     for r in rows:
         d = dict(r)
         d["parametros"], d["detalhe"] = json.loads(d["parametros"]), json.loads(d["detalhe"])
-        d["descricao"] = DESCRICOES.get(d["regra"], d["regra"]).format(**{**d["parametros"], **d["detalhe"]})
+        d["descricao"] = descrever(d["regra"], d["parametros"], d["detalhe"])
         out.append(d)
     return out
 
@@ -208,6 +228,6 @@ def do_dia(db: Db, hoje: date) -> list[dict]:
     for r in rows:
         d = dict(r)
         d["parametros"], d["detalhe"] = json.loads(d["parametros"]), json.loads(d["detalhe"])
-        d["descricao"] = DESCRICOES.get(d["regra"], d["regra"]).format(**{**d["parametros"], **d["detalhe"]})
+        d["descricao"] = descrever(d["regra"], d["parametros"], d["detalhe"])
         out.append(d)
     return out

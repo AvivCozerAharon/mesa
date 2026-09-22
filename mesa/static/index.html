@@ -1,0 +1,322 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>mesa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
+<style>
+  :root{
+    --fundo:#12151A; --painel:#191D24; --painel2:#1F242C; --linha:#2A3039; --texto:#E9E4D8; --apagado:#8C94A0;
+    --latao:#E9B44C; --alta:#57C48A; --baixa:#E36B5F; --info:#6FA8DC; --revisar:#E9B44C;
+    --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace; --sans:"IBM Plex Sans",system-ui,sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--fundo);color:var(--texto);font:13px/1.45 var(--mono)}
+  a{color:var(--info);text-decoration:none} a:hover{text-decoration:underline}
+  button,input,select,textarea{font:inherit;color:inherit}
+  button{background:transparent;border:1px solid var(--linha);border-radius:3px;padding:5px 10px;cursor:pointer}
+  button:hover{background:var(--painel2)} button.primario{border-color:var(--latao);color:var(--latao)}
+  button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--latao);outline-offset:1px}
+  input,select,textarea{background:var(--fundo);border:1px solid var(--linha);border-radius:3px;padding:6px 8px;width:100%}
+  textarea{font-family:var(--sans);min-height:64px;resize:vertical}
+  .num{font-variant-numeric:tabular-nums} .alta{color:var(--alta)} .baixa{color:var(--baixa)} .apagado{color:var(--apagado)}
+  .prosa{font-family:var(--sans);font-size:14px;line-height:1.5}
+
+  /* topo */
+  header{display:flex;align-items:center;gap:18px;padding:10px 16px;border-bottom:1px solid var(--linha);background:var(--painel)}
+  header h1{font-size:15px;font-weight:600;margin:0;letter-spacing:.02em} header h1 b{color:var(--latao);font-weight:600}
+  .macro{display:flex;gap:18px;overflow-x:auto;flex:1;white-space:nowrap;scrollbar-width:none}
+  .macro div{display:flex;flex-direction:column;line-height:1.2}
+  .macro .l{color:var(--apagado);font-size:11px} .macro .v{font-weight:500}
+  .idade{color:var(--apagado);font-size:11px}
+  #relogio{color:var(--apagado);font-size:12px}
+
+  /* grade */
+  main{display:grid;grid-template-columns:320px minmax(0,1fr) 360px;height:calc(100vh - 47px)}
+  aside,section{overflow-y:auto;min-width:0}
+  aside{background:var(--painel);border-right:1px solid var(--linha)} aside.dir{border-right:0;border-left:1px solid var(--linha)}
+  .bloco{padding:14px 16px;border-bottom:1px solid var(--linha)}
+  .bloco h2{font-size:12px;font-weight:600;color:var(--apagado);margin:0 0 10px;letter-spacing:.01em}
+  .bloco h2 span{float:right;font-weight:400}
+
+  /* carteira */
+  .resumo{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px}
+  .resumo .v{font-size:20px;font-weight:500;line-height:1.1} .resumo .l{color:var(--apagado);font-size:11px}
+  table.pos{width:100%;border-collapse:collapse}
+  table.pos{table-layout:fixed} table.pos td{padding:7px 3px;border-top:1px solid var(--linha);vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  table.pos td:first-child{width:46%} table.pos td:nth-child(2){width:26%}
+  table.pos tr{cursor:pointer} table.pos tr:hover td{background:var(--painel2)} table.pos tr.sel td{background:#242B36}
+  table.pos tr.sel td:first-child{box-shadow:inset 3px 0 0 var(--latao)}
+  table.pos .ativo{font-weight:500} table.pos .tipo{color:var(--apagado);font-size:11px;display:block}
+  table.pos td.r{text-align:right}
+  .marca{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:8px;vertical-align:-1px;border:1.5px solid var(--apagado)}
+  .marca.sim{background:var(--alta);border-color:var(--alta)} .marca.revisar{background:var(--revisar);border-color:var(--revisar)}
+  .marca.nao_avaliavel{background:transparent} .marca.erro{border-color:var(--baixa);border-style:dashed}
+  .exposicao{display:flex;height:8px;border-radius:2px;overflow:hidden;margin-top:10px;background:#2A3039}
+  .exposicao i{display:block;height:100%}
+  .leg{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:6px;font-size:11px;color:var(--apagado)}
+  .leg i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+
+  /* ativo */
+  .cab{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  .cab h2{font-size:22px;font-weight:600;margin:0;color:var(--texto)}
+  .cab .preco{font-size:22px} .cab .meta{color:var(--apagado)}
+  #grafico{height:300px;margin-top:10px;border:1px solid var(--linha);border-radius:3px}
+  .metricas{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px 16px}
+  .metricas .l{color:var(--apagado);font-size:11px} .metricas .v{font-size:15px;font-weight:500}
+  .tese-box{border-left:3px solid var(--latao);padding:8px 12px;background:var(--painel);margin-top:6px}
+  .tese-box .veredito{font-weight:600} .veredito.sim{color:var(--alta)} .veredito.revisar{color:var(--revisar)} .veredito.nao_avaliavel{color:var(--apagado)}
+  ul.lista{list-style:none;margin:0;padding:0} ul.lista li{padding:6px 0;border-top:1px solid var(--linha)}
+  ul.lista li:first-child{border-top:0} ul.lista .meta{color:var(--apagado);font-size:11px}
+  .form{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px;margin-top:8px}
+  .form label{display:flex;flex-direction:column;gap:3px;color:var(--apagado);font-size:11px}
+  .form .largo{grid-column:1/-1} .acoes{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+  .vazio{color:var(--apagado);padding:30px 0;text-align:center}
+  .gat{display:flex;justify-content:space-between;gap:8px;align-items:center}
+  .gat button{padding:2px 7px;font-size:11px}
+
+  /* hoje */
+  .disparo{border-left:3px solid var(--revisar);padding:6px 10px;margin:6px 0;background:var(--painel2)}
+  .disparo .meta{color:var(--apagado);font-size:11px}
+  .op{display:grid;grid-template-columns:1fr auto;gap:2px 8px;font-size:11px}
+  .op .ok{color:var(--alta)} .op .erro{color:var(--baixa)}
+
+  /* login / modal */
+  .veu{position:fixed;inset:0;background:rgba(18,21,26,.86);display:none;align-items:center;justify-content:center;z-index:9}
+  .veu.aberto{display:flex} .caixa{background:var(--painel);border:1px solid var(--linha);border-radius:4px;padding:20px;width:min(520px,92vw);max-height:90vh;overflow:auto}
+  .caixa h2{margin:0 0 10px;font-size:15px}
+  .aviso{color:var(--baixa);font-size:12px;margin-top:6px;min-height:16px}
+  kbd{border:1px solid var(--linha);border-radius:3px;padding:0 4px;font-size:11px;color:var(--apagado)}
+
+  @media (max-width:1100px){ main{grid-template-columns:280px minmax(0,1fr)} aside.dir{grid-column:1/-1;border-left:0;border-top:1px solid var(--linha)} main{height:auto} }
+  @media (max-width:760px){ main{grid-template-columns:1fr} aside{border-right:0;border-bottom:1px solid var(--linha)} header{flex-wrap:wrap} #grafico{height:220px} }
+  @media (prefers-reduced-motion:no-preference){ table.pos tr td{transition:background .15s} }
+</style>
+</head>
+<body>
+<header>
+  <h1><b>mesa</b></h1>
+  <div class="macro" id="macro"></div>
+  <span id="relogio"></span>
+</header>
+
+<main>
+  <aside class="esq">
+    <div class="bloco">
+      <h2>Carteira <span id="cartData"></span></h2>
+      <div class="resumo">
+        <div><div class="v num" id="rTotal">–</div><div class="l">valor em R$</div></div>
+        <div><div class="v num" id="rPnl">–</div><div class="l">resultado</div></div>
+      </div>
+      <div class="exposicao" id="expo"></div><div class="leg" id="expoLeg"></div>
+    </div>
+    <div class="bloco">
+      <h2>Posições <span><button id="btnNova" class="primario" style="padding:2px 8px;font-size:11px">+ posição</button></span></h2>
+      <table class="pos"><tbody id="posicoes"></tbody></table>
+      <div class="apagado" style="font-size:11px;margin-top:8px">● tese de pé &nbsp;● revisar &nbsp;○ sem novidade &nbsp;· <kbd>j</kbd><kbd>k</kbd> navega</div>
+    </div>
+  </aside>
+
+  <section id="centro">
+    <div class="bloco" id="ativoCab"><div class="vazio">Selecione uma posição.</div></div>
+    <div class="bloco" id="ativoGrafico" hidden><div id="grafico"></div></div>
+    <div class="bloco" id="ativoMetricas" hidden><h2>Números <span id="metData"></span></h2><div class="metricas" id="metricas"></div></div>
+    <div class="bloco" id="ativoTese" hidden><h2>Tese</h2><div id="teseVeredito"></div>
+      <textarea id="teseTxt" placeholder="Por que você tem essa posição? Em 2 linhas. A IA checa isso contra os fatos e notícias."></textarea>
+      <div class="acoes"><button id="btnTese" class="primario">Salvar nova versão da tese</button><span class="apagado" id="teseHist"></span></div></div>
+    <div class="bloco" id="ativoNoticias" hidden><h2>Notícias dos últimos 7 dias <span id="notN"></span></h2><ul class="lista" id="noticias"></ul></div>
+    <div class="bloco" id="ativoGatilhos" hidden><h2>Gatilhos desta posição</h2><ul class="lista" id="gatilhos"></ul>
+      <div class="form"><label>regra<select id="gRegra"></select></label><label>parâmetros (JSON)<input id="gParams" value="{}"></label></div>
+      <div class="acoes"><button id="btnGat">Adicionar gatilho</button></div></div>
+    <div class="bloco" id="ativoEditar" hidden><h2>Editar posição</h2>
+      <div class="form">
+        <label>quantidade<input id="eQtd" type="number" step="any"></label><label>preço médio<input id="ePm" type="number" step="any"></label>
+        <label>data da compra<input id="eData" type="date"></label><label>termos de notícia (separe por ;)<input id="eBusca"></label>
+      </div>
+      <div class="acoes"><button id="btnSalvar" class="primario">Salvar</button><button id="btnExcluir">Excluir posição</button><span class="aviso" id="eAviso"></span></div></div>
+  </section>
+
+  <aside class="dir">
+    <div class="bloco"><h2>Hoje <span id="brData"></span></h2><div class="prosa" id="brCarteira"><span class="apagado">Sem briefing ainda.</span></div>
+      <div id="olhar" style="margin-top:8px"></div></div>
+    <div class="bloco"><h2>Gatilhos disparados <span id="dispN"></span></h2><div id="disparos"><span class="apagado">Nenhum pendente.</span></div></div>
+    <div class="bloco"><h2>Teses hoje</h2><ul class="lista" id="brPos"></ul></div>
+    <div class="bloco"><h2>Operação <span id="opCusto"></span></h2><div class="op" id="operacao"></div>
+      <div class="acoes"><button id="btnJobFech">Atualizar preços</button><button id="btnJobBrief">Gerar briefing</button><span class="apagado" id="jobStatus"></span></div></div>
+  </aside>
+</main>
+
+<div class="veu" id="login"><div class="caixa"><h2>mesa</h2><p class="prosa apagado">Sua carteira. Senha definida em MESA_SENHA.</p>
+  <input id="senha" type="password" placeholder="senha" autocomplete="current-password"><div class="aviso" id="loginAviso"></div>
+  <div class="acoes"><button id="btnLogin" class="primario">Entrar</button></div></div></div>
+
+<div class="veu" id="nova"><div class="caixa"><h2>Nova posição</h2>
+  <div class="form">
+    <label>tipo<select id="nTipo"><option value="acao">ação B3</option><option value="fii">FII</option><option value="etf">ETF B3</option><option value="bdr">BDR</option><option value="acao_us">ação EUA</option><option value="etf_us">ETF EUA</option><option value="fundo">fundo (CNPJ)</option><option value="tesouro">Tesouro Direto</option></select></label>
+    <label>identificador<input id="nId" placeholder="PETR4 · AAPL · 22.215.116/0001-80 · Tesouro IPCA+ 2035"></label>
+    <label>nome (opcional)<input id="nNome"></label><label>quantidade<input id="nQtd" type="number" step="any"></label>
+    <label>preço médio<input id="nPm" type="number" step="any"></label><label>data da compra<input id="nData" type="date"></label>
+    <label class="largo">termos de notícia (separe por ;)<input id="nBusca" placeholder="PETR4;Petrobras"></label>
+    <label class="largo">tese<textarea id="nTese"></textarea></label>
+  </div><div class="aviso" id="nAviso"></div>
+  <div class="acoes"><button id="btnCriar" class="primario">Adicionar</button><button id="btnCancelar">Cancelar</button></div></div></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const fmt = (v, d=2) => v == null || Number.isNaN(v) ? '–' : v.toLocaleString('pt-BR', {minimumFractionDigits:d, maximumFractionDigits:d});
+const pct = v => v == null ? '–' : (v > 0 ? '+' : '') + fmt(v, 1) + '%';
+const cls = v => v == null ? '' : v > 0 ? 'alta' : v < 0 ? 'baixa' : '';
+const TIPO = {acao:'ação', fii:'FII', etf:'ETF', bdr:'BDR', acao_us:'ação EUA', etf_us:'ETF EUA', fundo:'fundo', tesouro:'Tesouro'};
+const CORES = {acao:'#E9B44C', fii:'#B08968', etf:'#C9A227', bdr:'#D4A05A', acao_us:'#6FA8DC', etf_us:'#4F86B8', fundo:'#9C86C9', tesouro:'#57C48A'};
+let carteira = null, sel = null, grafico = null, serieG = null, regras = {};
+
+async function api(caminho, opts={}) {
+  const r = await fetch(caminho, {headers:{'content-type':'application/json'}, ...opts});
+  if (r.status === 401) { $('login').classList.add('aberto'); throw new Error('login'); }
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error(j.detail || r.statusText);
+  return j;
+}
+$('btnLogin').onclick = async () => {
+  try { await api('/login', {method:'POST', body:JSON.stringify({senha:$('senha').value})}); $('login').classList.remove('aberto'); tudo(); }
+  catch (e) { $('loginAviso').textContent = e.message; }
+};
+$('senha').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnLogin').click(); });
+
+// ---- macro ----
+async function macro() {
+  const m = await api('/macro'); const b = m.benchmarks; const rot = {IBOV:'Ibovespa', SP500:'S&P 500', NASDAQ:'Nasdaq', IFIX:'IFIX', USDBRL:'USD/BRL', CDI:'CDI (índice)'};
+  let html = '';
+  for (const k of ['IBOV','SP500','NASDAQ','USDBRL','IFIX']) { const x = b[k]; if (!x) continue;
+    html += `<div><span class="l">${rot[k]} <span class="idade">${x.data.slice(5)}</span></span><span class="v num">${fmt(x.ultimo, k==='USDBRL'?3:0)} <span class="${cls(x.var_1d)}">${pct(x.var_1d)}</span></span></div>`; }
+  for (const [pais, c] of Object.entries(m.curvas || {})) {
+    const p10 = (c.pontos||[]).find(p => /10 Yr|2035/.test(p.titulo + ' ' + p.vencimento)) || (c.pontos||[])[Math.floor((c.pontos||[]).length/2)];
+    if (p10) html += `<div><span class="l">juros ${pais} ${p10.titulo.replace('Tesouro ','')} <span class="idade">${c.data.slice(5)}</span></span><span class="v num">${fmt(p10.taxa,2)}%</span></div>`; }
+  $('macro').innerHTML = html;
+}
+
+// ---- carteira ----
+function marca(p) { const t = p.tese_hoje; return `<span class="marca ${t||''}" title="${t||'sem briefing'}"></span>`; }
+async function carregarCarteira(aoVivo=false) {
+  carteira = await api('/carteira' + (aoVivo ? '?ao_vivo=1' : ''));
+  const r = carteira.resumo; $('cartData').textContent = carteira.hoje;
+  $('rTotal').textContent = fmt(r.valor_brl, 0); $('rPnl').innerHTML = `<span class="${cls(r.pnl_brl)}">${r.pnl_brl>0?'+':''}${fmt(r.pnl_brl,0)}</span> <span class="apagado" style="font-size:12px">${pct(r.custo_brl ? r.pnl_brl/r.custo_brl*100 : null)}</span>`;
+  const tot = Object.values(r.por_tipo).reduce((a,b)=>a+b,0) || 1;
+  $('expo').innerHTML = Object.entries(r.por_tipo).map(([t,v]) => `<i style="width:${v/tot*100}%;background:${CORES[t]}" title="${TIPO[t]} ${fmt(v/tot*100,0)}%"></i>`).join('');
+  $('expoLeg').innerHTML = Object.entries(r.por_tipo).map(([t,v]) => `<span><i style="background:${CORES[t]}"></i>${TIPO[t]} ${fmt(v/tot*100,0)}%</span>`).join('') + (r.sem_preco.length ? `<span class="baixa">sem preço: ${r.sem_preco.join(', ')}</span>` : '');
+  const br = await api('/briefing').catch(() => null);
+  const teses = {}; (br?.posicoes||[]).forEach(p => teses[p.posicao_id] = p.saida ? p.saida.tese_continua : 'erro');
+  carteira.posicoes.forEach(p => p.tese_hoje = teses[p.id]);
+  $('posicoes').innerHTML = carteira.posicoes.map(p => `<tr data-id="${p.id}" class="${sel===p.id?'sel':''}">
+    <td>${marca(p)}<span class="ativo">${p.ativo}</span><span class="tipo">${TIPO[p.tipo]} · ${p.idade_dias==null?'sem preço':p.idade_dias===0?'hoje':'D-'+p.idade_dias}</span></td>
+    <td class="r num">${fmt(p.preco, p.tipo==='fundo'?4:2)}<span class="tipo">${p.moeda}</span></td>
+    <td class="r num ${cls(p.pnl_pct)}">${pct(p.pnl_pct)}<span class="tipo" title="peso na carteira">${p.peso!=null?fmt(p.peso,0)+'% cart.':''}</span></td></tr>`).join('');
+  if (br) renderHoje(br);
+  if (sel == null && carteira.posicoes.length) selecionar(carteira.posicoes[0].id);
+}
+$('posicoes').addEventListener('click', e => { const tr = e.target.closest('tr'); if (tr) selecionar(+tr.dataset.id); });
+document.addEventListener('keydown', e => {
+  if (['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName) || !carteira) return;
+  const ids = carteira.posicoes.map(p => p.id); const i = ids.indexOf(sel);
+  if (e.key === 'j') selecionar(ids[Math.min(ids.length-1, i+1)]); if (e.key === 'k') selecionar(ids[Math.max(0, i-1)]);
+});
+
+// ---- ativo ----
+async function selecionar(id) {
+  sel = id; [...$('posicoes').children].forEach(tr => tr.classList.toggle('sel', +tr.dataset.id === id));
+  const a = await api('/ativo/' + id); const m = a.metricas || {}; const p = carteira.posicoes.find(x => x.id === id) || {};
+  ['ativoGrafico','ativoMetricas','ativoTese','ativoNoticias','ativoGatilhos','ativoEditar'].forEach(x => $(x).hidden = false);
+  $('ativoCab').innerHTML = `<div class="cab"><h2>${a.ativo}</h2><span class="preco num">${fmt(p.preco, a.tipo==='fundo'?4:2)} <span class="apagado" style="font-size:13px">${p.moeda}</span></span>
+    <span class="meta">${TIPO[a.tipo]} · ${a.identificador} · ${p.data_preco ? 'preço de ' + p.data_preco : 'sem preço'}</span></div>
+    <div class="apagado" style="margin-top:6px">${fmt(a.quantidade, 0)} × ${fmt(a.preco_medio, a.tipo==='fundo'?4:2)} desde ${a.data_compra} · posição ${fmt(p.valor_brl,0)} R$ · resultado <span class="${cls(p.pnl_brl)}">${p.pnl_brl>0?'+':''}${fmt(p.pnl_brl,0)} (${pct(p.pnl_pct)})</span></div>`;
+  desenhar(a);
+  const r = m.retornos || {}, b = m.bench_retornos || {}, ex = m.excesso || {}, dd = m.drawdown || {}, s52 = m.s52 || {};
+  const met = [];
+  const linha = (l, v, extra='') => met.push(`<div><div class="l">${l}</div><div class="v num ${extra}">${v}</div></div>`);
+  linha('12 meses', `<span class="${cls(r['12m'])}">${pct(r['12m'])}</span> <span class="apagado" style="font-size:11px">${m.benchmark||''} ${pct(b['12m'])}</span>`);
+  linha('desde a compra', `<span class="${cls(m.vs_preco_medio_pct ?? r.desde_compra)}">${pct(m.vs_preco_medio_pct ?? r.desde_compra)}</span>`);
+  linha('1 mês', `<span class="${cls(r['1m'])}">${pct(r['1m'])}</span> <span class="apagado" style="font-size:11px">${pct(b['1m'])}</span>`);
+  linha('drawdown', `<span class="${cls(dd.atual)}">${pct(dd.atual)}</span> <span class="apagado" style="font-size:11px">máx ${pct(dd.maximo)}</span>`);
+  linha('52 semanas', `<span class="apagado" style="font-size:11px">topo</span> ${pct(s52.pct_do_topo)} <span class="apagado" style="font-size:11px">fundo</span> ${pct(s52.pct_do_fundo)}`);
+  linha('vol 30d / 12m', `${fmt(m.vol_30d,0)}% / ${fmt(m.vol_252d,0)}%`);
+  linha('média 50 / 200', `${fmt(m.mm50, 1)} / ${fmt(m.mm200, 1)}`);
+  if (m.beta_12m != null) linha('beta 12m', fmt(m.beta_12m, 2));
+  if (a.tipo === 'fundo') {
+    linha('% do benchmark 12m', `${fmt((m.pct_do_bench||{})['12m'],0)}%`);
+    linha('janelas de 12m batidas', m.janelas_12m ? `${m.janelas_12m.batidas}/${m.janelas_12m.n} (${fmt(m.janelas_12m.pct,0)}%)` : '–');
+    const pr = (m.pares||{})['12m']; if (pr) linha('vs pares (12m)', `mediana ${pct(pr.mediana_pares)} · percentil ${fmt(pr.percentil,0)} de ${pr.n_pares}`);
+    linha('taxas adm / perf', `${m.taxa_adm!=null?fmt(m.taxa_adm,2)+'%':'sem lâmina'} / ${m.taxa_perf!=null?fmt(m.taxa_perf,0)+'%':'–'}`);
+    linha('PL', `R$ ${fmt(m.pl/1e6,0)} mi`); linha('captação líquida 6m', `<span class="${cls(m.captacao_liquida_6m)}">R$ ${fmt(m.captacao_liquida_6m/1e6,0)} mi</span>`);
+  }
+  $('metricas').innerHTML = met.join(''); $('metData').textContent = m.data_metricas ? 'calculado em ' + m.data_metricas : 'sem métricas ainda';
+  $('teseTxt').value = a.tese || ''; $('teseHist').textContent = a.historico_teses.length ? `${a.historico_teses.length} versão(ões); última em ${a.historico_teses.at(-1).criada_em.slice(0,10)}` : 'sem tese ainda';
+  const br = await api('/briefing').catch(() => null); const bp = (br?.posicoes||[]).find(x => x.posicao_id === id);
+  if (bp && bp.saida) { const s = bp.saida; $('teseVeredito').innerHTML = `<div class="tese-box prosa"><div class="veredito ${s.tese_continua}">${{sim:'Tese continua de pé', revisar:'Revisar a tese', nao_avaliavel:'Sem elementos para avaliar hoje'}[s.tese_continua]}</div>
+      <div>${s.justificativa}</div><div class="apagado" style="margin-top:6px">${s.situacao}</div>${s.pontos_de_atencao.length ? '<ul style="margin:6px 0 0;padding-left:18px">' + s.pontos_de_atencao.map(x => `<li>${x}</li>`).join('') + '</ul>' : ''}
+      <div class="apagado" style="font-size:11px;margin-top:6px">IA · ${bp.modelo} · ${(bp.latencia_ms/1000).toFixed(0)} s · ${bp.tokens_in}+${bp.tokens_out} tokens${bp.custo_usd ? ' · US$ ' + bp.custo_usd.toFixed(4) : ''}</div></div>`; }
+  else $('teseVeredito').innerHTML = bp ? `<div class="tese-box prosa apagado">Briefing de hoje inválido ou indisponível: ${bp.erro||''}</div>` : '<div class="tese-box prosa apagado">Sem briefing de hoje para esta posição.</div>';
+  const ns = await api('/noticias?posicao=' + id); $('notN').textContent = ns.length;
+  $('noticias').innerHTML = ns.length ? ns.map(n => `<li><a href="${n.url}" target="_blank" rel="noopener">${n.titulo}</a><div class="meta">${n.fonte||''} · ${(n.publicada_em||'').slice(0,10)} · casou por ${n.metodo}</div></li>`).join('') : '<li class="apagado">Nada casou com esta posição na janela.</li>';
+  const gs = await api('/gatilhos?posicao=' + id);
+  $('gatilhos').innerHTML = gs.length ? gs.map(g => `<li class="gat"><span>${g.descricao || g.regra}${g.posicao_id==null?' <span class="apagado">(global)</span>':''}</span><button data-g="${g.id}">remover</button></li>`).join('') : '<li class="apagado">Sem gatilhos.</li>';
+  $('eQtd').value = a.quantidade; $('ePm').value = a.preco_medio; $('eData').value = a.data_compra; $('eBusca').value = a.busca || '';
+}
+function fmtDesc(d, p) { return d.replace(/\{(\w+)\}/g, (_, k) => p[k] ?? {pct:15, fator:2, limite:'–'}[k] ?? '–').replace('{limite}', p.pct ?? '–'); }
+function desenhar(a) {
+  if (!grafico) { grafico = LightweightCharts.createChart($('grafico'), {layout:{background:{color:'#12151A'}, textColor:'#8C94A0', fontFamily:'IBM Plex Mono'}, grid:{vertLines:{color:'#1F242C'}, horzLines:{color:'#1F242C'}}, rightPriceScale:{borderColor:'#2A3039'}, timeScale:{borderColor:'#2A3039'}, autoSize:true, crosshair:{mode:0}}); }
+  if (serieG) grafico.removeSeries(serieG);
+  const s = a.serie || [];
+  if (a.tipo === 'fundo') { serieG = grafico.addLineSeries({color:'#E9B44C', lineWidth:2}); serieG.setData(s.map(x => ({time:x.data, value:x.valor}))); }
+  else { serieG = grafico.addCandlestickSeries({upColor:'#57C48A', downColor:'#E36B5F', wickUpColor:'#57C48A', wickDownColor:'#E36B5F', borderVisible:false}); serieG.setData(s.map(x => ({time:x.data, open:x.abertura, high:x.maxima, low:x.minima, close:x.fechamento}))); }
+  serieG.createPriceLine({price:a.preco_medio, color:'#8C94A0', lineStyle:2, lineWidth:1, title:'preço médio'});
+  const m = a.metricas || {}; if (m.mm200) serieG.createPriceLine({price:m.mm200, color:'#6FA8DC', lineStyle:3, lineWidth:1, title:'mm200'});
+  grafico.timeScale().setVisibleLogicalRange({from:Math.max(0, s.length - 260), to:s.length});
+}
+$('btnTese').onclick = async () => { await api(`/posicoes/${sel}/tese`, {method:'POST', body:JSON.stringify({texto:$('teseTxt').value})}); selecionar(sel); };
+$('btnSalvar').onclick = async () => { try { await api('/posicoes/' + sel, {method:'PUT', body:JSON.stringify({quantidade:+$('eQtd').value, preco_medio:+$('ePm').value, data_compra:$('eData').value, busca:$('eBusca').value})}); $('eAviso').textContent = ''; await carregarCarteira(); selecionar(sel); } catch (e) { $('eAviso').textContent = e.message; } };
+$('btnExcluir').onclick = async () => { if (!confirm('Excluir esta posição da carteira?')) return; await api('/posicoes/' + sel, {method:'DELETE'}); sel = null; carregarCarteira(); };
+$('gatilhos').addEventListener('click', async e => { const b = e.target.closest('button'); if (!b) return; await api('/gatilhos/' + b.dataset.g, {method:'DELETE'}); selecionar(sel); });
+$('btnGat').onclick = async () => { try { await api('/gatilhos', {method:'POST', body:JSON.stringify({posicao_id:sel, regra:$('gRegra').value, parametros:JSON.parse($('gParams').value || '{}')})}); selecionar(sel); } catch (e) { alert(e.message); } };
+
+// ---- hoje ----
+function renderHoje(br) {
+  $('brData').textContent = br.data || ''; const c = br.carteira && br.carteira.saida;
+  $('brCarteira').innerHTML = c ? c.resumo : `<span class="apagado">${br.carteira ? 'Briefing da carteira inválido: ' + (br.carteira.erro||'') : 'Sem briefing de hoje ainda.'}</span>`;
+  $('olhar').innerHTML = c && c.olhar_hoje.length ? 'Olhar hoje: ' + c.olhar_hoje.map(a => `<b>${a}</b>`).join(', ') : '';
+  const nome = id => (carteira?.posicoes.find(p => p.id === id) || {}).ativo || '?';
+  $('brPos').innerHTML = (br.posicoes||[]).map(p => { const s = p.saida; return `<li><span class="marca ${s ? s.tese_continua : 'erro'}"></span><b>${p.ativo || nome(p.posicao_id)}</b> <span class="apagado">${s ? {sim:'de pé', revisar:'revisar', nao_avaliavel:'sem elementos'}[s.tese_continua] : 'inválido'}</span>${s ? `<div class="meta prosa" style="font-size:12px">${s.justificativa}</div>` : ''}</li>`; }).join('') || '<li class="apagado">–</li>';
+  $('opCusto').textContent = br.tokens_in ? `IA hoje: ${br.tokens_in}+${br.tokens_out} tokens${br.custo_usd ? ' · US$ ' + br.custo_usd.toFixed(3) : ''}` : '';
+}
+async function disparos() {
+  const ds = await api('/disparos'); $('dispN').textContent = ds.length || '';
+  $('disparos').innerHTML = ds.length ? ds.map(d => `<div class="disparo"><b>${d.ativo||'carteira'}</b> — ${d.descricao}<div class="meta">${d.data} · <a href="#" data-v="${d.id}">marcar como visto</a></div></div>`).join('') : '<span class="apagado">Nenhum pendente.</span>';
+}
+$('disparos').addEventListener('click', async e => { const a = e.target.closest('a[data-v]'); if (!a) return; e.preventDefault(); await api(`/disparos/${a.dataset.v}/visto`, {method:'POST'}); disparos(); });
+async function operacao() {
+  const o = await api('/operacao'); const ult = {};
+  o.coletas.forEach(c => { if (!ult[c.fonte]) ult[c.fonte] = c; });
+  $('operacao').innerHTML = Object.values(ult).map(c => `<span>${c.fonte}</span><span class="${c.erro?'erro':'ok'}" title="${c.erro||''}">${c.erro ? 'erro' : (c.linhas ?? '–') + ' · ' + (c.duracao_ms/1000).toFixed(0) + 's'} <span class="apagado">${c.executada_em.slice(5,16).replace('T',' ')}</span></span>`).join('');
+  $('relogio').textContent = 'agora ' + o.agora.slice(11,16) + ' BRT';
+}
+async function job(nome) { $('jobStatus').textContent = 'rodando ' + nome + '…'; try { await api('/job/' + nome, {method:'POST'}); $('jobStatus').textContent = nome + ' concluído'; tudo(); } catch (e) { $('jobStatus').textContent = e.message; } }
+$('btnJobFech').onclick = () => job('fechamento'); $('btnJobBrief').onclick = () => job('briefing');
+
+// ---- nova posicao ----
+$('btnNova').onclick = () => $('nova').classList.add('aberto'); $('btnCancelar').onclick = () => $('nova').classList.remove('aberto');
+$('btnCriar').onclick = async () => {
+  try { await api('/posicoes', {method:'POST', body:JSON.stringify({tipo:$('nTipo').value, identificador:$('nId').value, ativo:$('nNome').value, quantidade:+$('nQtd').value, preco_medio:+$('nPm').value, data_compra:$('nData').value, busca:$('nBusca').value, tese:$('nTese').value})});
+    $('nova').classList.remove('aberto'); ['nId','nNome','nQtd','nPm','nBusca','nTese'].forEach(i => $(i).value = ''); sel = null; carregarCarteira(); }
+  catch (e) { $('nAviso').textContent = e.message; }
+};
+
+async function tudo() {
+  try { regras = await api('/gatilhos/regras'); $('gRegra').innerHTML = regras.regras.map(r => `<option value="${r}">${r}</option>`).join('');
+    await Promise.all([macro(), carregarCarteira(), disparos(), operacao()]); } catch (e) { if (e.message !== 'login') console.error(e); }
+}
+tudo(); setInterval(() => { carregarCarteira(true).catch(()=>{}); operacao().catch(()=>{}); }, 60000);
+</script>
+</body>
+</html>
