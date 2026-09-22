@@ -32,6 +32,7 @@ class PosicaoIn(BaseModel):
     preco_medio: float
     data_compra: date
     tese: str | None = None
+    busca: str = ""
 
 
 class TeseIn(BaseModel):
@@ -102,7 +103,7 @@ def criar_app(cfg: Config, db: Db | None = None, consulta: Consulta | None = Non
     @app.post("/posicoes", status_code=201, dependencies=[Depends(autenticado)])
     def criar_posicao(corpo: PosicaoIn):
         try:
-            p = Posicao(corpo.ativo, corpo.tipo, corpo.identificador, corpo.quantidade, corpo.preco_medio, corpo.data_compra)
+            p = Posicao(corpo.ativo, corpo.tipo, corpo.identificador, corpo.quantidade, corpo.preco_medio, corpo.data_compra, busca=corpo.busca)
         except ValueError as e:
             raise HTTPException(status_code=422, detail=str(e))
         pid = carteira.criar(p, corpo.tese)

@@ -162,6 +162,14 @@ class Db:
         self._con = sqlite3.connect(db_path, check_same_thread=False)
         self._con.row_factory = sqlite3.Row
         self._con.executescript(SCHEMA)
+        self._migrar()
+
+    def _migrar(self) -> None:
+        """Colunas adicionadas depois do schema inicial (SQLite nao tem ADD COLUMN IF NOT EXISTS)."""
+        colunas = {r[1] for r in self._con.execute("PRAGMA table_info(posicoes)").fetchall()}
+        if "busca" not in colunas:
+            self._con.execute("ALTER TABLE posicoes ADD COLUMN busca TEXT NOT NULL DEFAULT ''")
+            self._con.commit()
 
     @property
     def con(self) -> sqlite3.Connection:
