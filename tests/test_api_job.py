@@ -77,7 +77,7 @@ def test_api_crud_e_carteira(ambiente):
     c = cli.get("/carteira").json()
     assert c["resumo"]["valor_brl"] > 0 and c["posicoes"][0]["metricas"]["benchmark"]
     petr = next(p for p in c["posicoes"] if p["ativo"] == "PETR4")
-    assert petr["tese"] == "petróleo" and petr["idade_dias"] == 3
+    assert petr["tese"] == "petróleo" and petr["idade_dias"] == (date.today() - date(2026, 9, 18)).days  # /carteira usa a data real
     r = cli.post("/posicoes", json={"tipo": "fundo", "identificador": "11.222.333/0001-81", "quantidade": 10, "preco_medio": 1.5,
                                     "data_compra": "2026-01-05", "ativo": "Fundo X", "tese": "gestor"})
     assert r.status_code == 201 and r.json()["identificador"] == "11222333000181"

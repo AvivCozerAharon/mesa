@@ -267,9 +267,17 @@ def gerar_briefings(cfg: Config, db: Db, consulta: Consulta, carteira: Carteira,
 
 def enviar_email(cfg: Config, db: Db, consulta: Consulta, carteira: Carteira, hoje: date, novos_disparos: list[dict]) -> dict:
     fx, _ = cambio_atual(consulta)
-    res = resumo(valorizar(carteira.listar(), precos_atuais(consulta, carteira), fx, hoje))
-    corpo = email_mod.corpo_briefing(ia.briefing_do_dia(db, hoje), novos_disparos, res)
-    enviado = email_mod.enviar(cfg, f"mesa — briefing {hoje.isoformat()}", corpo)
+    pos = carteira.listar()
+    val = valorizar(pos, precos_atuais(consulta, carteira), fx, hoje)
+    res = resumo(val)
+    linhas = [] if val.empty else [{k: (None if v != v else v) if isinstance(v, float) else v for k, v in r.items()} for r in val.to_dict("records")]
+    # URL por titulo: a entrada da IA leva so titulo/fonte/data (token e hash); o e-mail recupera o link daqui.
+    urls = {n["titulo"]: n.get("url") for p in pos for n in noti.recentes(db, p.identificador) if n.get("url")}
+    gerais = noti.gerais(db, dias=1, limite=8)
+    briefing = ia.briefing_do_dia(db, hoje)
+    corpo = email_mod.corpo_briefing(briefing, novos_disparos, res, gerais, urls)
+    html_corpo = email_mod.html_briefing(briefing, novos_disparos, res, linhas, gerais, urls)
+    enviado = email_mod.enviar(cfg, f"mesa — briefing {hoje.isoformat()}", corpo, html_corpo=html_corpo)
     return {"n": 1 if enviado else 0, "enviado": enviado}
 
 
