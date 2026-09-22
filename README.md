@@ -82,7 +82,7 @@ coluna `busca` = termos de notícia, ex.: `PETR4;Petrobras`). Docker: `docker co
 8. Reexecutar o job no mesmo dia chamava a IA de novo porque a entrada trazia só os gatilhos "novos
    da rodada"; agora traz os disparos do dia — reexecução é de graça.
 9. `.env` copiado do Windows com CRLF (e uma aspa solta): a chave chegava ao container com `"` no
-   fim e a OpenAI devolvia 401. O job registrou o erro por posição e seguiu; `sed 's/$//'` resolveu.
+   fim e a OpenAI devolvia 401. O job registrou o erro por posição e seguiu; `sed -i 's/$//' .env` resolveu.
 
 ## Limites conhecidos
 
