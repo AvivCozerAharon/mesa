@@ -47,7 +47,7 @@
   .resumo .v{font-size:20px;font-weight:500;line-height:1.1} .resumo .l{color:var(--apagado);font-size:11px}
   table.pos{width:100%;border-collapse:collapse}
   table.pos{table-layout:fixed} table.pos td{padding:7px 3px;border-top:1px solid var(--linha);vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  table.pos td:first-child{width:46%} table.pos td:nth-child(2){width:26%}
+  #posicoes td:first-child{width:46%} #posicoes td:nth-child(2){width:26%}
   table.pos tr{cursor:pointer} table.pos tr:hover td{background:var(--painel2)} table.pos tr.sel td{background:#242B36}
   table.pos tr.sel td:first-child{box-shadow:inset 3px 0 0 var(--latao)}
   table.pos .ativo{font-weight:500} table.pos .tipo{color:var(--apagado);font-size:11px;display:block}
@@ -124,6 +124,8 @@
     <div class="bloco" id="ativoCab"><div class="vazio">Selecione uma posição.</div></div>
     <div class="bloco" id="ativoGrafico" hidden><div id="grafico"></div></div>
     <div class="bloco" id="ativoMetricas" hidden><h2>Números <span id="metData"></span></h2><div class="metricas" id="metricas"></div></div>
+    <div class="bloco" id="ativoFund" hidden><h2>Fundamentos <span id="fundData"></span></h2><div class="metricas" id="fundamentos"></div>
+      <table class="pos" id="trimestres" style="margin-top:10px"></table></div>
     <div class="bloco" id="ativoTese" hidden><h2>Tese</h2><div id="teseVeredito"></div>
       <textarea id="teseTxt" placeholder="Por que você tem essa posição? Em 2 linhas. A IA checa isso contra os fatos e notícias."></textarea>
       <div class="acoes"><button id="btnTese" class="primario">Salvar nova versão da tese</button><span class="apagado" id="teseHist"></span></div></div>
@@ -251,11 +253,24 @@ async function selecionar(id) {
     linha('taxas adm / perf', `${m.taxa_adm!=null?fmt(m.taxa_adm,2)+'%':'sem lâmina'} / ${m.taxa_perf!=null?fmt(m.taxa_perf,0)+'%':'–'}`);
     linha('PL', `R$ ${fmt(m.pl/1e6,0)} mi`); linha('captação líquida 6m', `<span class="${cls(m.captacao_liquida_6m)}">R$ ${fmt(m.captacao_liquida_6m/1e6,0)} mi</span>`);
   }
+  const f = m.fundamentos; $('ativoFund').hidden = !f;
+  if (f) {
+    const fl = []; const li = (l, v) => fl.push(`<div><div class="l">${l}</div><div class="v num">${v}</div></div>`);
+    li('P/L', fmt(f.pe,1)); li('P/VP', fmt(f.pvp,2)); li('EV/EBITDA', fmt(f.ev_ebitda,1)); li('margem EBITDA', f.margem_ebitda!=null?fmt(f.margem_ebitda,1)+'%':'–');
+    li('margem líquida', f.margem_liquida!=null?fmt(f.margem_liquida,1)+'%':'–'); li('ROE', f.roe!=null?fmt(f.roe,1)+'%':'–');
+    li('dív. líq./EBITDA', f.divida_liq_ebitda!=null?fmt(f.divida_liq_ebitda,2)+'×':'–'); li('dividend yield', f.dy!=null?fmt(f.dy,2)+'%':'–');
+    li('payout', f.payout!=null?fmt(f.payout,0)+'%':'–'); li('receita 12m', f.receita!=null?fmt(f.receita/1e9,1)+' bi '+(f.moeda||''):'–');
+    li('cresc. receita', f.cresc_receita!=null?pct(f.cresc_receita):'–'); li('cresc. lucro', f.cresc_lucro!=null?pct(f.cresc_lucro):'–');
+    $('fundamentos').innerHTML = fl.join(''); $('fundData').textContent = f.ultimo_balanco ? 'último balanço ' + f.ultimo_balanco + ' · Yahoo' : 'Yahoo';
+    const tri = m.trimestres || [];
+    $('trimestres').innerHTML = tri.length ? `<tr class="apagado"><td>trimestre (bi ${f.moeda_dre||''})</td><td class="r">receita</td><td class="r">EBITDA</td><td class="r">lucro</td></tr>` +
+      tri.slice(-6).reverse().map(t => `<tr style="cursor:default"><td>${t.trimestre.slice(0,7)}</td><td class="r num">${fmt(t.receita/1e9,1)}</td><td class="r num">${fmt(t.ebitda/1e9,1)}</td><td class="r num ${cls(t.lucro)}">${fmt(t.lucro/1e9,1)}</td></tr>`).join('') : '';
+  }
   $('metricas').innerHTML = met.join(''); $('metData').textContent = m.data_metricas ? 'calculado em ' + m.data_metricas : 'sem métricas ainda';
   $('teseTxt').value = a.tese || ''; $('teseHist').textContent = a.historico_teses.length ? `${a.historico_teses.length} versão(ões); última em ${a.historico_teses.at(-1).criada_em.slice(0,10)}` : 'sem tese ainda';
   const br = await api('/briefing').catch(() => null); const bp = (br?.posicoes||[]).find(x => x.posicao_id === id);
   if (bp && bp.saida) { const s = bp.saida; $('teseVeredito').innerHTML = `<div class="tese-box prosa"><div class="veredito ${s.tese_continua}">${{sim:'Tese continua de pé', revisar:'Revisar a tese', nao_avaliavel:'Sem elementos para avaliar hoje'}[s.tese_continua]}</div>
-      <div>${s.justificativa}</div><div class="apagado" style="margin-top:6px">${s.situacao}</div>${s.pontos_de_atencao.length ? '<ul style="margin:6px 0 0;padding-left:18px">' + s.pontos_de_atencao.map(x => `<li>${x}</li>`).join('') + '</ul>' : ''}
+      <div>${s.justificativa}</div><div class="apagado" style="margin-top:6px">${s.situacao}</div>${s.leitura_fundamentos ? `<div style="margin-top:6px"><span class="apagado">Fundamentos:</span> ${s.leitura_fundamentos}</div>` : ''}${s.pontos_de_atencao.length ? '<ul style="margin:6px 0 0;padding-left:18px">' + s.pontos_de_atencao.map(x => `<li>${x}</li>`).join('') + '</ul>' : ''}
       <div class="apagado" style="font-size:11px;margin-top:6px">IA · ${bp.modelo} · ${(bp.latencia_ms/1000).toFixed(0)} s · ${bp.tokens_in}+${bp.tokens_out} tokens${bp.custo_usd ? ' · US$ ' + bp.custo_usd.toFixed(4) : ''}</div></div>`; }
   else $('teseVeredito').innerHTML = bp ? `<div class="tese-box prosa apagado">Briefing de hoje inválido ou indisponível: ${bp.erro||''}</div>` : '<div class="tese-box prosa apagado">Sem briefing de hoje para esta posição.</div>';
   const ns = await api('/noticias?posicao=' + id); $('notN').textContent = ns.length;

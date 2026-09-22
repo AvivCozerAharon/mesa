@@ -171,5 +171,21 @@
    ]
   },
   "valida": true
+ },
+ {
+  "nome": "leitura de fundamentos com numero inventado",
+  "saida": {
+   "situacao": "PETR4 a 48.0, 49.5% acima do preço médio; 12 meses +69.5% contra +20.0% do IBOV.",
+   "tese_continua": "sim",
+   "justificativa": "Dividendo anunciado reforça a tese [N1].",
+   "citacoes": [
+    "N1"
+   ],
+   "pontos_de_atencao": [
+    "A 5.0% do topo de 52 semanas"
+   ],
+   "leitura_fundamentos": "P/L de 3.9 indica barganha."
+  },
+  "valida": false
  }
 ]

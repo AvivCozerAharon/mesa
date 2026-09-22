@@ -99,28 +99,53 @@ def fundo_resgate(m, p, _n):
     return {"captacao_liquida_6m_pct_pl": _pct(razao), "limite": lim} if razao <= -lim else None
 
 
+def receita_caiu_2tri(m, p, _n):
+    """Receita do ultimo trimestre abaixo dos dois anteriores (fundamentos do Yahoo)."""
+    tri = [t for t in (m.get("trimestres") or []) if t.get("receita")]
+    if len(tri) < 3:
+        return None
+    a, b, c = tri[-3]["receita"], tri[-2]["receita"], tri[-1]["receita"]
+    return {"receita_ultimo": c, "receita_anterior": b, "trimestre": tri[-1]["trimestre"]} if c < b < a else None
+
+
+def margem_ebitda_abaixo(m, p, _n):
+    v = _g(m, "fundamentos", "margem_ebitda")
+    lim = p.get("pct", 10)
+    return {"margem_ebitda_pct": _pct(v), "limite": lim} if v is not None and v < lim else None
+
+
+def divida_liq_ebitda_acima(m, p, _n):
+    v = _g(m, "fundamentos", "divida_liq_ebitda")
+    lim = p.get("vezes", 3)
+    return {"divida_liq_ebitda": _pct(v), "limite": lim} if v is not None and v > lim else None
+
+
 REGRAS = {f.__name__: f for f in (queda_desde_compra, queda_1m, abaixo_mm50, abaixo_mm200, min_52s, max_52s, vol_spike,
-                                  drawdown, noticia_contem, fundo_abaixo_bench, fundo_pct_bench_12m, fundo_resgate)}
+                                  drawdown, noticia_contem, fundo_abaixo_bench, fundo_pct_bench_12m, fundo_resgate,
+                                  receita_caiu_2tri, margem_ebitda_abaixo, divida_liq_ebitda_acima)}
 PADRAO = [("queda_desde_compra", {"pct": 15}), ("min_52s", {}), ("vol_spike", {}),
           ("noticia_contem", {"termos": ["recuperação judicial", "fraude", "investiga", "CVM abre processo", "delisting"]}),
-          ("fundo_abaixo_bench", {}), ("fundo_resgate", {})]
+          ("fundo_abaixo_bench", {}), ("fundo_resgate", {}), ("receita_caiu_2tri", {}), ("divida_liq_ebitda_acima", {"vezes": 3})]
 DESCRICOES = {"queda_desde_compra": "caiu {limite} % ou mais desde a compra", "queda_1m": "caiu {limite} % ou mais em 1 mês",
               "abaixo_mm50": "abaixo da média de 50 dias", "abaixo_mm200": "abaixo da média de 200 dias",
               "min_52s": "na mínima de 52 semanas", "max_52s": "na máxima de 52 semanas",
               "vol_spike": "volatilidade de 30 d ≥ {fator}× a de 12 m", "drawdown": "drawdown de {limite} % ou mais",
               "noticia_contem": "notícia com termo sensível", "fundo_abaixo_bench": "fundo bateu o benchmark em menos de {limite} % das janelas de 12 m",
-              "fundo_pct_bench_12m": "fundo abaixo de {limite} % do benchmark em 12 m", "fundo_resgate": "resgates de {limite} % do PL em 6 m"}
+              "fundo_pct_bench_12m": "fundo abaixo de {limite} % do benchmark em 12 m", "fundo_resgate": "resgates de {limite} % do PL em 6 m",
+              "receita_caiu_2tri": "receita caiu por dois trimestres seguidos", "margem_ebitda_abaixo": "margem EBITDA abaixo de {limite} %",
+              "divida_liq_ebitda_acima": "dívida líquida acima de {limite}× o EBITDA"}
 
 
 PADROES_PARAMS = {"queda_desde_compra": {"pct": 15}, "queda_1m": {"pct": 10}, "min_52s": {"tolerancia_pct": 1}, "max_52s": {"tolerancia_pct": 1},
                   "vol_spike": {"fator": 2}, "drawdown": {"pct": 20}, "fundo_abaixo_bench": {"pct": 50}, "fundo_pct_bench_12m": {"pct": 90},
-                  "fundo_resgate": {"pct": 20}, "noticia_contem": {"termos": []}, "abaixo_mm50": {}, "abaixo_mm200": {}}
+                  "fundo_resgate": {"pct": 20}, "noticia_contem": {"termos": []}, "abaixo_mm50": {}, "abaixo_mm200": {},
+                  "receita_caiu_2tri": {}, "margem_ebitda_abaixo": {"pct": 10}, "divida_liq_ebitda_acima": {"vezes": 3}}
 
 
 def descrever(regra: str, params: dict, detalhe: dict | None = None) -> str:
     """Texto humano da regra com os parametros efetivos (padrao + os do usuario + detalhe do disparo)."""
     p = {**PADROES_PARAMS.get(regra, {}), **(params or {})}
-    p.setdefault("limite", p.get("pct"))
+    p.setdefault("limite", p.get("pct", p.get("vezes")))
     p.update(detalhe or {})
     try:
         return DESCRICOES.get(regra, regra).format(**p)

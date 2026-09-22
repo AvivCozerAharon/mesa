@@ -22,6 +22,8 @@ VIEWS = {
     "curvas": ("curvas", ["pais", "data", "titulo", "vencimento"]),
     "fundos_cadastro": ("fundos_cadastro", ["cnpj"]),
     "fundos_taxas": ("fundos_taxas", ["cnpj"]),
+    "fundamentos": ("fundamentos", ["ativo"]),
+    "dre_trimestral": ("dre_trimestral", ["ativo", "trimestre"]),
 }
 
 
@@ -114,6 +116,18 @@ class Consulta:
             return pd.DataFrame()
         marcas = ", ".join("?" for _ in cnpjs)
         return self._df(f"SELECT * FROM fundos_taxas WHERE cnpj IN ({marcas})", cnpjs)
+
+    def fundamentos(self, ativos: list[str]) -> pd.DataFrame:
+        if not ativos:
+            return pd.DataFrame()
+        marcas = ", ".join("?" for _ in ativos)
+        return self._df(f"SELECT * FROM fundamentos WHERE ativo IN ({marcas})", ativos)
+
+    def dre(self, ativos: list[str]) -> pd.DataFrame:
+        if not ativos:
+            return pd.DataFrame()
+        marcas = ", ".join("?" for _ in ativos)
+        return self._df(f"SELECT * FROM dre_trimestral WHERE ativo IN ({marcas}) ORDER BY ativo, trimestre", ativos)
 
     def ultima_data(self, view: str, coluna_chave: str, valor: str) -> date | None:
         df = self._df(f"SELECT max(data) AS d FROM {view} WHERE {coluna_chave} = ?", [valor])

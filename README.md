@@ -8,8 +8,9 @@ qualquer pessoa roda com a própria carteira. Spec: `docs/superpowers/specs/2026
 
 1. Como está a carteira (valor, P&L, pesos, exposição por moeda/classe) e o que mexeu.
 2. Por posição: onde o preço está (52 semanas, drawdown, vol, médias, beta), retorno vs benchmark,
-   notícias dos últimos 7 dias casadas ao ativo, e **"a tese continua de pé?"** — avaliada por IA
-   só com os fatos e notícias fornecidos, com citação obrigatória.
+   fundamentos (múltiplos, margens, alavancagem, dividendos, últimos trimestres), notícias dos últimos
+   7 dias casadas ao ativo, e **"a tese continua de pé?"** — avaliada por IA só com os fatos e notícias
+   fornecidos, com citação obrigatória; a IA também descreve o que os fundamentos mostram, sem julgar caro/barato.
 3. Gatilhos que **você** definiu (queda desde a compra, mínima de 52 s, pico de vol, notícia com termo
    sensível, fundo abaixo do benchmark, resgates no fundo…), idempotentes.
 4. Fundos: retorno vs benchmark declarado, janelas móveis de 12 m, mediana dos pares da mesma classe
@@ -30,6 +31,7 @@ validador e não vai pra tela.
 | CDI, Selic, IPCA | BCB SGS | diário |
 | curva BR (Tesouro Direto) | Tesouro Transparente | diário |
 | curva EUA | Treasury.gov | diário |
+| fundamentos de ações (P/L, EV/EBITDA, margens, ROE, dív. líq./EBITDA, DY, payout, crescimento, DRE trimestral) | Yahoo Finance | diário; balanço do trimestre anterior |
 | notícias | Google News RSS por termo de busca de cada posição + feeds | contínuo |
 | IA | OpenAI (modelo por env), saída JSON validada | por briefing |
 
@@ -81,8 +83,17 @@ coluna `busca` = termos de notícia, ex.: `PETR4;Petrobras`). Docker: `docker co
 7. Notícia repetida não era recasada quando a carteira ganhava termos novos: dedupe passou a recasar.
 8. Reexecutar o job no mesmo dia chamava a IA de novo porque a entrada trazia só os gatilhos "novos
    da rodada"; agora traz os disparos do dia — reexecução é de graça.
-9. `.env` copiado do Windows com CRLF (e uma aspa solta): a chave chegava ao container com `"` no
-   fim e a OpenAI devolvia 401. O job registrou o erro por posição e seguiu; `sed -i 's/$//' .env` resolveu.
+9. `.env` copiado do Windows com CRLF (e uma aspa solta): a chave chegava ao container com `
+"` no
+   fim e a OpenAI devolvia 401. O job registrou o erro por posição e seguiu; `sed -i 's/
+$//' .env` resolveu.
+
+10. Yahoo entrega o `dividendYield` já em % (AAPL 0,32; PETR4 8,94) e eu "normalizei" 0,32 → 32 %.
+    A IA repetiu "dividend yield 32 %" com toda a confiança: o validador garante coerência com a
+    entrada, não verdade. Achado lendo o próprio briefing.
+11. Para tickers da B3 o Yahoo devolve o `info` em BRL e a DRE em USD (Petrobras: 548 bi vs 89 bi/ano).
+    A moeda da DRE agora é inferida pela razão receita 12 m / soma dos 4 trimestres e vai rotulada
+    para a tela e para a IA.
 
 ## Limites conhecidos
 

@@ -15,6 +15,7 @@ from mesa.config import Config
 from mesa.fontes import Contexto, executar
 from mesa.fontes.bcb import SGS
 from mesa.fontes.cvm import Cadastro, InformeDiario, Lamina
+from mesa.fontes.fundamentos import Fundamentos
 from mesa.fontes.tesouro import TesouroDireto
 from mesa.fontes.treasury_us import Treasury
 from mesa.fontes.yahoo import Yahoo
@@ -40,17 +41,22 @@ def coletar(cfg: Config, db: Db, fontes: list, ctx: Contexto) -> list[dict]:
         df, col = executar(fonte, ctx)
         if col.ok and not df.empty:
             gravar_parquet(cfg.dados_dir, fonte.tabela, ctx.agora.date(), df, fonte=fonte.nome)
+            sec = getattr(fonte, "tabela_secundaria", None)
+            df2 = getattr(fonte, "dre", None)
+            if sec and df2 is not None and not df2.empty:
+                gravar_parquet(cfg.dados_dir, sec, ctx.agora.date(), df2, fonte=fonte.nome)
         db.registrar_coleta(fonte.nome, ctx.agora.date(), col.linhas if col.ok else None, col.duracao_ms, col.erro)
         log.info("coleta %s ok=%s linhas=%s %sms %s", fonte.nome, col.ok, col.linhas, col.duracao_ms, col.erro or col.detalhe)
         resultados.append({"fonte": fonte.nome, "ok": col.ok, "linhas": col.linhas, "erro": col.erro, "detalhe": col.detalhe})
     return resultados
 
 
-def fontes_manha(cfg: Config, consulta: Consulta) -> list:
+def fontes_manha(cfg: Config, consulta: Consulta, carteira: "Carteira | None" = None) -> list:
     def cadastro_fn():
         cad = consulta.cadastro_fundos()
         return cad if not cad.empty else None
-    return [Cadastro(), Lamina(), InformeDiario(cadastro_fn), SGS(), TesouroDireto(), Treasury()]
+    tipos = {p.identificador: p.tipo for p in carteira.listar()} if carteira else {}
+    return [Cadastro(), Lamina(), InformeDiario(cadastro_fn), SGS(), TesouroDireto(), Treasury(), Fundamentos(tipos)]
 
 
 def fontes_fechamento() -> list:
@@ -123,12 +129,23 @@ def calcular(cfg: Config, db: Db, consulta: Consulta, carteira: Carteira, agora:
     cadastro = consulta.cadastro_fundos(carteira.cnpjs()) if carteira.cnpjs() else pd.DataFrame()
     taxas = consulta.taxas_fundos(carteira.cnpjs()) if carteira.cnpjs() else pd.DataFrame()
     cotas = consulta.cotas(carteira.cnpjs()) if carteira.cnpjs() else pd.DataFrame()
+    acoes = [p.identificador for p in pos if p.tipo in ("acao", "acao_us", "bdr")]
+    fund = consulta.fundamentos(acoes) if acoes else pd.DataFrame()
+    dre = consulta.dre(acoes) if acoes else pd.DataFrame()
     calculadas = 0
     for p in pos:
         b = bench.get(BENCH_POR_TIPO[p.tipo], pd.Series(dtype=float))
         if p.mercado in ("B3", "US") and not precos_df.empty:
             s = _serie(precos_df, "ativo", p.identificador, "ajustado")
             m = metricas_posicao(s, b, hoje, p.data_compra, p.preco_medio)
+            if not fund.empty and (fund["ativo"] == p.identificador).any():
+                f = fund[fund["ativo"] == p.identificador].iloc[0].to_dict()
+                m["fundamentos"] = {k: (None if pd.isna(v) else (pd.Timestamp(v).date().isoformat() if hasattr(v, "isoformat") else v))
+                                    for k, v in f.items() if k not in ("ativo", "mercado", "data", "coletado_em")}
+                tri = dre[dre["ativo"] == p.identificador].sort_values("trimestre").tail(8)
+                m["trimestres"] = [{"trimestre": pd.Timestamp(r["trimestre"]).date().isoformat(),
+                                    **{k: (None if pd.isna(r[k]) else float(r[k])) for k in ("receita", "ebitda", "lucro_operacional", "lucro")}}
+                                   for _, r in tri.iterrows()]
         elif p.tipo == "fundo" and not cotas.empty:
             cota = _serie(cotas, "cnpj", p.identificador, "cota", "cnpj")
             pl = _serie(cotas, "cnpj", p.identificador, "pl", "cnpj")
@@ -263,7 +280,7 @@ def manha(cfg: Config, agora: datetime | None = None, cliente_ia=None, so_briefi
     hoje = ctx.agora.date()
     out = {}
     if not so_briefing:
-        out["coletas"] = coletar(cfg, db, fontes_manha(cfg, consulta), ctx)
+        out["coletas"] = coletar(cfg, db, fontes_manha(cfg, consulta, carteira), ctx)
         out["calculo"] = calcular(cfg, db, consulta, carteira, ctx.agora)
     out["noticias"] = _etapa(db, "noticias", hoje, lambda: coletar_noticias(db, carteira))
     gat_res = _etapa(db, "gatilhos", hoje, lambda: avaliar_gatilhos(db, carteira, hoje))

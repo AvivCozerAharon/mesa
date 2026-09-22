@@ -26,12 +26,15 @@ Regras invioláveis:
 2. NUNCA recomende comprar, vender, manter, aumentar ou reduzir a posição. Você descreve; ele decide.
 3. Toda afirmação baseada em notícia cita o id entre colchetes, ex.: [N2]. Só cite ids que existem na entrada.
 4. Todo número que você escrever precisa aparecer na entrada (pode arredondar para 1 casa decimal). Prefira repetir o número exato.
-5. "tese_continua" responde se a TESE DO INVESTIDOR (texto fornecido) continua de pé à luz dos fatos/notícias:
+5. "leitura_fundamentos": se a entrada trouxer "fundamentos"/"trimestres", descreva em até 60 palavras o que os números mostram
+   (lucratividade, alavancagem, crescimento, distribuição de dividendos) — sem julgar caro/barato e sem recomendar. Sem fundamentos: "".
+6. "tese_continua" responde se a TESE DO INVESTIDOR (texto fornecido) continua de pé à luz dos fatos/notícias:
    "sim" (nada nos fatos/notícias contradiz a tese), "revisar" (algo fornecido contradiz ou enfraquece a tese — diga o quê, com citação),
    "nao_avaliavel" (não há notícia nem gatilho relevante para julgar). Sem tese fornecida: "nao_avaliavel".
-6. Português do Brasil, direto, sem floreio, sem cumprimentos.
+7. Português do Brasil, direto, sem floreio, sem cumprimentos.
 Responda SOMENTE com JSON válido neste formato:
 {"situacao": "até 90 palavras: onde o preço/cota está e o que mudou, com números da entrada",
+ "leitura_fundamentos": "até 60 palavras sobre o que os fundamentos mostram, ou vazio",
  "tese_continua": "sim|revisar|nao_avaliavel",
  "justificativa": "até 60 palavras, citando [N#] quando usar notícia",
  "citacoes": ["N1"],
@@ -45,6 +48,7 @@ Responda SOMENTE com JSON: {"resumo": "até 120 palavras", "olhar_hoje": ["nomes
 RECOMENDACAO = re.compile(r"\b(compre|venda|vend[ae]r|comprar|mantenha|manter a posi|aumente|reduza|zere|desfa[çc]a|realize lucro)\b", re.I)
 NUMERO = re.compile(r"(?<![A-Za-z#])[-+]?\d+(?:[.,]\d+)?")
 CHAVES_POSICAO = {"situacao": str, "tese_continua": str, "justificativa": str, "citacoes": list, "pontos_de_atencao": list}
+CHAVES_OPCIONAIS = {"leitura_fundamentos": str}
 ENUM_TESE = {"sim", "revisar", "nao_avaliavel"}
 
 
@@ -76,6 +80,20 @@ def montar_entrada(posicao: dict, tese: str | None, metricas: dict | None, notic
                       "pares_12m": m.get("pares", {}).get("12m"), "taxa_adm_pct": m.get("taxa_adm"), "taxa_perf_pct": m.get("taxa_perf"),
                       "pl_reais": _r1(m.get("pl")), "captacao_liquida_6m_reais": _r1(m.get("captacao_liquida_6m")),
                       "classe": m.get("classe"), "gestor": m.get("gestor")})
+    if m.get("fundamentos"):
+        f = m["fundamentos"]
+        fatos["fundamentos"] = {k: _r1(f.get(k)) for k in ("pe", "pe_projetado", "pvp", "ev_ebitda", "margem_ebitda", "margem_liquida", "roe",
+                                                           "divida_liq_ebitda", "dy", "payout", "cresc_receita", "cresc_lucro", "beta") if f.get(k) is not None}
+        for k in ("receita", "ebitda", "fcf", "market_cap"):
+            if f.get(k) is not None:
+                fatos["fundamentos"][k + "_bi"] = _r1(f[k] / 1e9)
+        fatos["fundamentos"]["moeda"] = f.get("moeda")
+        fatos["fundamentos"]["ultimo_balanco"] = f.get("ultimo_balanco")
+        fatos["fundamentos"]["unidades"] = "múltiplos em vezes; margens, roe, dy, payout e crescimento em %; valores _bi em bilhões"
+    if m.get("trimestres"):
+        fatos["trimestres_bi"] = {"moeda": (m.get("fundamentos") or {}).get("moeda_dre"),
+                                  "valores": [{"trimestre": t["trimestre"], **{k: _r1(t[k] / 1e9) for k in ("receita", "ebitda", "lucro") if t.get(k) is not None}}
+                                              for t in m["trimestres"][-6:]]}
     fatos = {k: v for k, v in fatos.items() if v not in (None, {}, [])}
     return {"fatos": fatos,
             "noticias": [{"id": f"N{i + 1}", "titulo": n["titulo"], "fonte": n.get("fonte") or "", "data": (n.get("publicada_em") or "")[:10]}
@@ -126,13 +144,17 @@ def validar(entrada: dict, saida, chaves: dict = CHAVES_POSICAO) -> tuple[bool, 
     for k, t in chaves.items():
         if k not in saida or not isinstance(saida[k], t):
             problemas.append(f"campo '{k}' ausente ou de tipo errado")
+    for k, t in CHAVES_OPCIONAIS.items():
+        if k in saida and not isinstance(saida[k], t):
+            problemas.append(f"campo '{k}' de tipo errado")
     if problemas:
         return False, problemas
     ids = {n["id"] for n in entrada.get("noticias", [])}
     citadas = set(saida.get("citacoes", []))
     if not citadas <= ids:
         problemas.append(f"citações inexistentes: {sorted(citadas - ids)}")
-    texto = " ".join([saida.get("situacao", ""), saida.get("justificativa", ""), saida.get("resumo", "")] + [str(p) for p in saida.get("pontos_de_atencao", [])])
+    texto = " ".join([saida.get("situacao", ""), saida.get("justificativa", ""), saida.get("resumo", ""), saida.get("leitura_fundamentos", "") or ""]
+                     + [str(p) for p in saida.get("pontos_de_atencao", [])])
     no_texto = set(re.findall(r"\[(N\d+)\]", texto))
     if not no_texto <= ids:
         problemas.append(f"texto cita id inexistente: {sorted(no_texto - ids)}")
