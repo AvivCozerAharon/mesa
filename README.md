@@ -55,6 +55,16 @@ python -m mesa.evals [--com-ia]    # evals de casamento, validador e tese
 Carteira: `POST /posicoes` (ou `POST /posicoes/importar` com um CSV como `dados_exemplo_carteira.csv`,
 coluna `busca` = termos de notícia, ex.: `PETR4;Petrobras`). Docker: `docker compose up --build`.
 
+**Fundos e "o que ele compra"**: cada posição aceita um `mandato` em texto livre (ex.: "debêntures
+incentivadas de infraestrutura e CRIs, meta CDI+2%"). Ao salvar sem termos de busca, a IA extrai 3–6
+termos ("debêntures incentivadas", "CRI infraestrutura", "saneamento básico"…) que passam a puxar as
+notícias da posição, e o mandato entra no briefing como critério de relevância. Os termos ficam
+editáveis; "Gerar termos com a IA" refaz.
+
+**E-mail diário**: o job da manhã envia o resumo (carteira, gatilhos, tese e fundamentos por posição,
+custo da IA) quando `MESA_SMTP_*` e `MESA_EMAIL_DESTINO` estão no `.env`. Com Gmail, use uma *senha de
+app* (Conta Google → Segurança → Verificação em duas etapas → Senhas de app).
+
 ## Como é feito
 
 - **Adapters de fonte** com contrato único (`coletar(ctx) -> (DataFrame, Coleta)`); erro vira registro

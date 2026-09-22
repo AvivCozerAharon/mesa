@@ -98,3 +98,10 @@ def test_briefing_carteira(db):
     cli = Fake([{"resumo": "Carteira em 22308.6 reais, +12.3%.", "olhar_hoje": ["PETR4"], "citacoes": []}])
     r = ia.gerar_briefing_carteira(cli, db, Config(), ent, date(2026, 9, 22))
     assert r["valido"] == 1 and ia.briefing_do_dia(db)["carteira"]["saida"]["olhar_hoje"] == ["PETR4"]
+
+
+def test_extrair_termos_do_mandato():
+    cli = Fake([{"termos": ["debêntures incentivadas", "crédito privado", "crédito privado", "mercado", "x" * 50, "CDI"]}])
+    assert ia.extrair_termos(cli, "Compra debêntures incentivadas e crédito privado high grade, meta CDI+2%") == ["debêntures incentivadas", "crédito privado", "mercado", "CDI"]
+    assert ia.extrair_termos(cli, "   ") == [] and cli.chamadas == 1
+    assert ia.montar_entrada({**POS, "mandato": "crédito privado"}, None, MET, [], [], date(2026, 9, 22))["mandato"] == "crédito privado"

@@ -43,6 +43,8 @@ def corpo_briefing(briefing: dict, disparos: list[dict], resumo: dict) -> str:
             linhas += [f"{p.get('ativo')}: briefing indisponível ({p.get('erro') or 'sem saída válida'})", ""]
             continue
         linhas += [f"{p.get('ativo')} — tese: {s.get('tese_continua')}", f"  {s.get('situacao')}", f"  {s.get('justificativa')}"]
+        if s.get("leitura_fundamentos"):
+            linhas.append(f"  Fundamentos: {s['leitura_fundamentos']}")
         linhas += [f"  • {x}" for x in s.get("pontos_de_atencao", [])]
         linhas.append("")
     linhas.append(f"IA: {briefing.get('tokens_in', 0)} tokens in, {briefing.get('tokens_out', 0)} out, US$ {briefing.get('custo_usd', 0):.4f}")

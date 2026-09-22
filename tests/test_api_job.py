@@ -99,3 +99,26 @@ def test_api_senha(tmp_path):
     assert cli.post("/login", json={"senha": "errada"}).status_code == 401
     assert cli.post("/login", json={"senha": "segredo"}).status_code == 200
     assert cli.get("/carteira").status_code == 200
+
+
+def test_mandato_gera_termos_com_ia(ambiente):
+    import json as _json
+    cfg, db, cart, pid = ambiente
+    app = criar_app(cfg, db, Consulta(cfg.dados_dir))
+
+    class FakeIA:
+        modelo = "fake"
+
+        def completar(self, s, u):
+            return _json.dumps({"termos": ["debêntures incentivadas", "crédito privado"]}), 10, 5, 1
+    app.state.cliente_ia = FakeIA()
+    cli = TestClient(app)
+    r = cli.post("/posicoes", json={"tipo": "fundo", "identificador": "11.222.333/0001-81", "quantidade": 10, "preco_medio": 1.5, "data_compra": "2026-01-05",
+                                    "ativo": "Fundo Crédito", "mandato": "debêntures incentivadas e crédito privado high grade"})
+    assert r.status_code == 201
+    fid = r.json()["id"]
+    assert cli.get("/posicoes").json()[-1]["busca"] == "debêntures incentivadas;crédito privado" or any(p["busca"].startswith("debêntures") for p in cli.get("/posicoes").json())
+    r2 = cli.put(f"/posicoes/{fid}", json={"busca": "manual", "mandato": "x"})
+    assert r2.json()["busca"] == "manual"  # busca preenchida nao e sobrescrita sem pedir
+    r3 = cli.put(f"/posicoes/{fid}", json={"gerar_termos": True})
+    assert r3.json()["busca"] == "debêntures incentivadas;crédito privado"

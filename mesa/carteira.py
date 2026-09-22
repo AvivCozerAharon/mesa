@@ -46,6 +46,7 @@ class Posicao:
     moeda: str = ""
     ativa: bool = True
     busca: str = ""             # termos de busca de noticias separados por ";" (ex.: "PETR4;Petrobras")
+    mandato: str = ""           # o que o fundo/ativo compra, em texto livre; a IA extrai termos de busca daqui
 
     def __post_init__(self):
         if self.tipo not in TIPOS:
@@ -89,9 +90,9 @@ class Carteira:
     def criar(self, p: Posicao, tese: str | None = None) -> int:
         ts = agora_utc().isoformat()
         cur = self._db.con.execute(
-            "INSERT INTO posicoes (ativo, tipo, mercado, identificador, quantidade, preco_medio, moeda, data_compra, ativa, criada_em, atualizada_em, busca)"
-            " VALUES (?,?,?,?,?,?,?,?,1,?,?,?)",
-            (p.ativo, p.tipo, p.mercado, p.identificador, p.quantidade, p.preco_medio, p.moeda, p.data_compra.isoformat(), ts, ts, p.busca or ""))
+            "INSERT INTO posicoes (ativo, tipo, mercado, identificador, quantidade, preco_medio, moeda, data_compra, ativa, criada_em, atualizada_em, busca, mandato)"
+            " VALUES (?,?,?,?,?,?,?,?,1,?,?,?,?)",
+            (p.ativo, p.tipo, p.mercado, p.identificador, p.quantidade, p.preco_medio, p.moeda, p.data_compra.isoformat(), ts, ts, p.busca or "", p.mandato or ""))
         self._db.con.commit()
         pid = cur.lastrowid
         if tese:
@@ -106,7 +107,8 @@ class Carteira:
     def _de_linha(r) -> Posicao:
         return Posicao(id=r["id"], ativo=r["ativo"], tipo=r["tipo"], identificador=r["identificador"],
                        quantidade=r["quantidade"], preco_medio=r["preco_medio"], data_compra=date.fromisoformat(r["data_compra"]),
-                       ativa=bool(r["ativa"]), busca=r["busca"] if "busca" in r.keys() else "")
+                       ativa=bool(r["ativa"]), busca=r["busca"] if "busca" in r.keys() else "",
+                       mandato=r["mandato"] if "mandato" in r.keys() else "")
 
     def listar(self, ativas: bool = True) -> list[Posicao]:
         sql = "SELECT * FROM posicoes" + (" WHERE ativa = 1" if ativas else "") + " ORDER BY tipo, ativo"
@@ -117,12 +119,12 @@ class Carteira:
         if atual is None:
             raise KeyError(pid)
         dados = atual.para_dict()
-        dados.update({k: v for k, v in campos.items() if k in ("ativo", "tipo", "identificador", "quantidade", "preco_medio", "data_compra", "busca")})
+        dados.update({k: v for k, v in campos.items() if k in ("ativo", "tipo", "identificador", "quantidade", "preco_medio", "data_compra", "busca", "mandato")})
         dados.pop("mercado"), dados.pop("moeda")
         novo = Posicao(**{k: v for k, v in dados.items() if k != "ativa"})
-        self._db.con.execute("UPDATE posicoes SET ativo=?, tipo=?, mercado=?, identificador=?, quantidade=?, preco_medio=?, moeda=?, data_compra=?, atualizada_em=?, busca=? WHERE id=?",
+        self._db.con.execute("UPDATE posicoes SET ativo=?, tipo=?, mercado=?, identificador=?, quantidade=?, preco_medio=?, moeda=?, data_compra=?, atualizada_em=?, busca=?, mandato=? WHERE id=?",
                              (novo.ativo, novo.tipo, novo.mercado, novo.identificador, novo.quantidade, novo.preco_medio,
-                              novo.moeda, novo.data_compra.isoformat(), agora_utc().isoformat(), novo.busca or "", pid))
+                              novo.moeda, novo.data_compra.isoformat(), agora_utc().isoformat(), novo.busca or "", novo.mandato or "", pid))
         self._db.con.commit()
         return self.obter(pid)
 
@@ -149,7 +151,8 @@ class Carteira:
                 try:
                     p = Posicao(ativo=row.get("ativo", ""), tipo=row["tipo"].strip(), identificador=row["identificador"],
                                 quantidade=float(row["quantidade"]), preco_medio=float(row["preco_medio"]),
-                                data_compra=date.fromisoformat(row["data_compra"].strip()), busca=(row.get("busca") or "").strip())
+                                data_compra=date.fromisoformat(row["data_compra"].strip()), busca=(row.get("busca") or "").strip(),
+                                mandato=(row.get("mandato") or "").strip())
                 except (KeyError, ValueError) as e:
                     raise ValueError(f"linha {i}: {e}") from e
                 self.criar(p, row.get("tese") or None)

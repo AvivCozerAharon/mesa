@@ -183,7 +183,9 @@ class Db:
         colunas = {r[1] for r in self._con.execute("PRAGMA table_info(posicoes)").fetchall()}
         if "busca" not in colunas:
             self._con.execute("ALTER TABLE posicoes ADD COLUMN busca TEXT NOT NULL DEFAULT ''")
-            self._con.commit()
+        if "mandato" not in colunas:
+            self._con.execute("ALTER TABLE posicoes ADD COLUMN mandato TEXT NOT NULL DEFAULT ''")
+        self._con.commit()
 
     @property
     def con(self) -> sqlite3.Connection:

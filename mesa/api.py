@@ -36,6 +36,7 @@ class PosicaoIn(BaseModel):
     data_compra: date
     tese: str | None = None
     busca: str = ""
+    mandato: str = ""
 
 
 class TeseIn(BaseModel):
@@ -48,6 +49,7 @@ def criar_app(cfg: Config, db: Db | None = None, consulta: Consulta | None = Non
     consulta = consulta or Consulta(cfg.dados_dir)
     carteira = Carteira(db)
     app.state.cfg, app.state.db, app.state.consulta, app.state.carteira = cfg, db, consulta, carteira
+    app.state.cliente_ia = None  # injetavel nos testes
     sessoes: set[str] = set()
     trava_job = threading.Lock()
     cache_cotacao = {"em": None, "dados": {}}
@@ -99,6 +101,20 @@ def criar_app(cfg: Config, db: Db | None = None, consulta: Consulta | None = Non
             linhas.append(r)
         return {"hoje": hoje.isoformat(), "cambio": fx, "data_cambio": data_fx, "resumo": resumo(val), "posicoes": linhas}
 
+    def _termos_do_mandato(pid: int, forcar: bool = False) -> None:
+        """Se a posicao tem mandato e nao tem termos de busca (ou pediu para regerar), a IA extrai os termos."""
+        p = carteira.obter(pid)
+        if not p or not p.mandato or (p.busca and not forcar):
+            return
+        try:
+            termos = ia.extrair_termos(app.state.cliente_ia or ia.ClienteOpenAI(cfg), p.mandato)
+        except ia.IAIndisponivel as e:
+            log.warning("termos do mandato: %s", e)
+            return
+        if termos:
+            base = [p.identificador] if p.mercado in ("B3", "US") else []
+            carteira.atualizar(pid, busca=";".join(base + termos))
+
     @app.get("/posicoes", dependencies=[Depends(autenticado)])
     def listar_posicoes():
         return [{**p.para_dict(), "tese": carteira.tese(p.id)} for p in carteira.listar()]
@@ -106,10 +122,12 @@ def criar_app(cfg: Config, db: Db | None = None, consulta: Consulta | None = Non
     @app.post("/posicoes", status_code=201, dependencies=[Depends(autenticado)])
     def criar_posicao(corpo: PosicaoIn):
         try:
-            p = Posicao(corpo.ativo, corpo.tipo, corpo.identificador, corpo.quantidade, corpo.preco_medio, corpo.data_compra, busca=corpo.busca)
+            p = Posicao(corpo.ativo, corpo.tipo, corpo.identificador, corpo.quantidade, corpo.preco_medio, corpo.data_compra,
+                        busca=corpo.busca, mandato=corpo.mandato)
         except ValueError as e:
             raise HTTPException(status_code=422, detail=str(e))
         pid = carteira.criar(p, corpo.tese)
+        _termos_do_mandato(pid)
         return {**carteira.obter(pid).para_dict(), "tese": carteira.tese(pid)}
 
     @app.put("/posicoes/{pid}", dependencies=[Depends(autenticado)])
@@ -122,6 +140,9 @@ def criar_app(cfg: Config, db: Db | None = None, consulta: Consulta | None = Non
             raise HTTPException(status_code=422, detail=str(e))
         if corpo.get("tese") is not None and corpo["tese"].strip() != (carteira.tese(pid) or ""):
             carteira.definir_tese(pid, corpo["tese"])
+        if corpo.get("gerar_termos") or (corpo.get("mandato") and not corpo.get("busca")):
+            _termos_do_mandato(pid, forcar=bool(corpo.get("gerar_termos")))
+        p = carteira.obter(pid)
         return {**p.para_dict(), "tese": carteira.tese(pid)}
 
     @app.delete("/posicoes/{pid}", dependencies=[Depends(autenticado)])

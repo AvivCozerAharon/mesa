@@ -137,8 +137,9 @@
       <div class="form">
         <label>quantidade<input id="eQtd" type="number" step="any"></label><label>preço médio<input id="ePm" type="number" step="any"></label>
         <label>data da compra<input id="eData" type="date"></label><label>termos de notícia (separe por ;)<input id="eBusca"></label>
+        <label class="largo">o que ele compra (mandato)<textarea id="eMandato"></textarea></label>
       </div>
-      <div class="acoes"><button id="btnSalvar" class="primario">Salvar</button><button id="btnExcluir">Excluir posição</button><span class="aviso" id="eAviso"></span></div></div>
+      <div class="acoes"><button id="btnSalvar" class="primario">Salvar</button><button id="btnTermos">Gerar termos de notícia com a IA</button><button id="btnExcluir">Excluir posição</button><span class="aviso" id="eAviso"></span></div></div>
   </section>
 
   <aside class="dir">
@@ -161,7 +162,8 @@
     <label>identificador<input id="nId" placeholder="PETR4 · AAPL · 22.215.116/0001-80 · Tesouro IPCA+ 2035"></label>
     <label>nome (opcional)<input id="nNome"></label><label>quantidade<input id="nQtd" type="number" step="any"></label>
     <label>preço médio<input id="nPm" type="number" step="any"></label><label>data da compra<input id="nData" type="date"></label>
-    <label class="largo">termos de notícia (separe por ;)<input id="nBusca" placeholder="PETR4;Petrobras"></label>
+    <label class="largo">o que ele compra (mandato — a IA extrai os termos de notícia daqui)<textarea id="nMandato" placeholder="ex.: debêntures incentivadas de infraestrutura e crédito privado high grade, meta CDI+2%"></textarea></label>
+    <label class="largo">termos de notícia (separe por ;) — deixe vazio para a IA gerar do mandato<input id="nBusca" placeholder="PETR4;Petrobras"></label>
     <label class="largo">tese<textarea id="nTese"></textarea></label>
   </div><div class="aviso" id="nAviso"></div>
   <div class="acoes"><button id="btnCriar" class="primario">Adicionar</button><button id="btnCancelar">Cancelar</button></div></div></div>
@@ -277,7 +279,7 @@ async function selecionar(id) {
   $('noticias').innerHTML = ns.length ? ns.map(n => `<li><a href="${n.url}" target="_blank" rel="noopener">${n.titulo}</a><div class="meta">${n.fonte||''} · ${(n.publicada_em||'').slice(0,10)} · casou por ${n.metodo}</div></li>`).join('') : '<li class="apagado">Nada casou com esta posição na janela.</li>';
   const gs = await api('/gatilhos?posicao=' + id);
   $('gatilhos').innerHTML = gs.length ? gs.map(g => `<li class="gat"><span>${g.descricao || g.regra}${g.posicao_id==null?' <span class="apagado">(global)</span>':''}</span><button data-g="${g.id}">remover</button></li>`).join('') : '<li class="apagado">Sem gatilhos.</li>';
-  $('eQtd').value = a.quantidade; $('ePm').value = a.preco_medio; $('eData').value = a.data_compra; $('eBusca').value = a.busca || '';
+  $('eQtd').value = a.quantidade; $('ePm').value = a.preco_medio; $('eData').value = a.data_compra; $('eBusca').value = a.busca || ''; $('eMandato').value = a.mandato || '';
 }
 function fmtDesc(d, p) { return d.replace(/\{(\w+)\}/g, (_, k) => p[k] ?? {pct:15, fator:2, limite:'–'}[k] ?? '–').replace('{limite}', p.pct ?? '–'); }
 function desenhar(a) {
@@ -291,7 +293,8 @@ function desenhar(a) {
   grafico.timeScale().setVisibleLogicalRange({from:Math.max(0, s.length - 260), to:s.length});
 }
 $('btnTese').onclick = async () => { await api(`/posicoes/${sel}/tese`, {method:'POST', body:JSON.stringify({texto:$('teseTxt').value})}); selecionar(sel); };
-$('btnSalvar').onclick = async () => { try { await api('/posicoes/' + sel, {method:'PUT', body:JSON.stringify({quantidade:+$('eQtd').value, preco_medio:+$('ePm').value, data_compra:$('eData').value, busca:$('eBusca').value})}); $('eAviso').textContent = ''; await carregarCarteira(); selecionar(sel); } catch (e) { $('eAviso').textContent = e.message; } };
+$('btnSalvar').onclick = async () => { try { await api('/posicoes/' + sel, {method:'PUT', body:JSON.stringify({quantidade:+$('eQtd').value, preco_medio:+$('ePm').value, data_compra:$('eData').value, busca:$('eBusca').value, mandato:$('eMandato').value})}); $('eAviso').textContent = ''; await carregarCarteira(); selecionar(sel); } catch (e) { $('eAviso').textContent = e.message; } };
+$('btnTermos').onclick = async () => { $('eAviso').textContent = 'gerando…'; try { const r = await api('/posicoes/' + sel, {method:'PUT', body:JSON.stringify({mandato:$('eMandato').value, gerar_termos:true})}); $('eBusca').value = r.busca; $('eAviso').textContent = r.busca ? 'termos: ' + r.busca : 'a IA não devolveu termos (mandato vazio ou chave ausente)'; } catch (e) { $('eAviso').textContent = e.message; } };
 $('btnExcluir').onclick = async () => { if (!confirm('Excluir esta posição da carteira?')) return; await api('/posicoes/' + sel, {method:'DELETE'}); sel = null; carregarCarteira(); };
 $('gatilhos').addEventListener('click', async e => { const b = e.target.closest('button'); if (!b) return; await api('/gatilhos/' + b.dataset.g, {method:'DELETE'}); selecionar(sel); });
 $('btnGat').onclick = async () => { try { await api('/gatilhos', {method:'POST', body:JSON.stringify({posicao_id:sel, regra:$('gRegra').value, parametros:JSON.parse($('gParams').value || '{}')})}); selecionar(sel); } catch (e) { alert(e.message); } };
@@ -322,8 +325,8 @@ $('btnJobFech').onclick = () => job('fechamento'); $('btnJobBrief').onclick = ()
 // ---- nova posicao ----
 $('btnNova').onclick = () => $('nova').classList.add('aberto'); $('btnCancelar').onclick = () => $('nova').classList.remove('aberto');
 $('btnCriar').onclick = async () => {
-  try { await api('/posicoes', {method:'POST', body:JSON.stringify({tipo:$('nTipo').value, identificador:$('nId').value, ativo:$('nNome').value, quantidade:+$('nQtd').value, preco_medio:+$('nPm').value, data_compra:$('nData').value, busca:$('nBusca').value, tese:$('nTese').value})});
-    $('nova').classList.remove('aberto'); ['nId','nNome','nQtd','nPm','nBusca','nTese'].forEach(i => $(i).value = ''); sel = null; carregarCarteira(); }
+  try { await api('/posicoes', {method:'POST', body:JSON.stringify({tipo:$('nTipo').value, identificador:$('nId').value, ativo:$('nNome').value, quantidade:+$('nQtd').value, preco_medio:+$('nPm').value, data_compra:$('nData').value, busca:$('nBusca').value, mandato:$('nMandato').value, tese:$('nTese').value})});
+    $('nova').classList.remove('aberto'); ['nId','nNome','nQtd','nPm','nBusca','nMandato','nTese'].forEach(i => $(i).value = ''); sel = null; carregarCarteira(); }
   catch (e) { $('nAviso').textContent = e.message; }
 };
 

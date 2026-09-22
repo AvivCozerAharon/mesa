@@ -26,6 +26,8 @@ Regras invioláveis:
 2. NUNCA recomende comprar, vender, manter, aumentar ou reduzir a posição. Você descreve; ele decide.
 3. Toda afirmação baseada em notícia cita o id entre colchetes, ex.: [N2]. Só cite ids que existem na entrada.
 4. Todo número que você escrever precisa aparecer na entrada (pode arredondar para 1 casa decimal). Prefira repetir o número exato.
+4b. Se a entrada trouxer "mandato" (o que o fundo/ativo compra), trate as notícias sobre essa classe de ativo/setor como
+   relevantes para a posição — a tese e o mandato são o critério de relevância.
 5. "leitura_fundamentos": se a entrada trouxer "fundamentos"/"trimestres", descreva em até 60 palavras o que os números mostram
    (lucratividade, alavancagem, crescimento, distribuição de dividendos) — sem julgar caro/barato e sem recomendar. Sem fundamentos: "".
 6. "tese_continua" responde se a TESE DO INVESTIDOR (texto fornecido) continua de pé à luz dos fatos/notícias:
@@ -99,7 +101,31 @@ def montar_entrada(posicao: dict, tese: str | None, metricas: dict | None, notic
             "noticias": [{"id": f"N{i + 1}", "titulo": n["titulo"], "fonte": n.get("fonte") or "", "data": (n.get("publicada_em") or "")[:10]}
                          for i, n in enumerate(noticias)],
             "tese": {"texto": tese, "definida_em": posicao.get("tese_em")} if tese else None,
+            "mandato": (posicao.get("mandato") or "").strip() or None,  # o que o fundo compra: define o que e noticia relevante
             "gatilhos_disparados": [{"regra": d["regra"], "descricao": d.get("descricao"), "detalhe": d.get("detalhe")} for d in disparos]}
+
+
+PROMPT_TERMOS = """Você recebe a descrição do que um fundo ou ativo compra (mandato). Devolva de 3 a 6 termos de busca curtos
+(1 a 3 palavras cada, em português, específicos: classes de ativo, instrumentos, setores, índices, gestora) que encontrem
+notícias relevantes para quem tem esse produto. Nada genérico como "mercado" ou "economia".
+Responda SOMENTE com JSON: {"termos": ["...", "..."]}"""
+
+
+def extrair_termos(cliente, mandato: str) -> list[str]:
+    """Termos de busca de notícias a partir do texto do mandato (uma chamada; sem chave, lista vazia)."""
+    if not (mandato or "").strip():
+        return []
+    texto, *_ = cliente.completar(PROMPT_TERMOS, json.dumps({"mandato": mandato.strip()}, ensure_ascii=False))
+    try:
+        termos = json.loads(texto).get("termos", [])
+    except (json.JSONDecodeError, AttributeError):
+        return []
+    limpos = []
+    for t in termos:
+        t = str(t).strip().strip('"').strip()
+        if 2 <= len(t) <= 40 and ";" not in t and t.lower() not in {x.lower() for x in limpos}:
+            limpos.append(t)
+    return limpos[:6]
 
 
 def _numeros(obj) -> set[str]:
