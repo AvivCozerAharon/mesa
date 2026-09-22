@@ -1,24 +1,9 @@
 {
  "casamento": {
   "n": 33,
-  "precisao": 0.931,
+  "precisao": 1.0,
   "recall": 1.0,
-  "erros": [
-   {
-    "titulo": "Helicóptero desaparece durante voo no interior de SP",
-    "esperados": [],
-    "obtidos": [
-     "VOO"
-    ]
-   },
-   {
-    "titulo": "Voo da Gol atrasa 3 horas em Congonhas",
-    "esperados": [],
-    "obtidos": [
-     "VOO"
-    ]
-   }
-  ]
+  "erros": []
  },
  "validacao": {
   "n": 12,

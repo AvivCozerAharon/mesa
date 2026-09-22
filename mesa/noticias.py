@@ -127,7 +127,9 @@ def casar(titulo: str, posicoes: list[Posicao], exclusoes: dict | None = None) -
             continue
         for termo in termos(p):
             toks = _tokens_relevantes(termo)
-            if toks and (ticker is None or normalizar_titulo(termo) != ticker) and all(t in palavras for t in toks):
+            if ticker and normalizar_titulo(termo) == normalizar_titulo(ticker):
+                continue  # o proprio ticker como termo so casa pelo caminho de maiusculas acima
+            if toks and all(t in palavras for t in toks):
                 out.append((ident, "nome", 0.8))
                 break
     return out
