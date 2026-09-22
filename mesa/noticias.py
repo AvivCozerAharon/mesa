@@ -117,8 +117,9 @@ def casar(titulo: str, posicoes: list[Posicao], exclusoes: dict | None = None) -
     out = []
     for p in posicoes:
         ident = p.identificador
-        ticker = normalizar_titulo(ident) if p.mercado in ("B3", "US") else None
-        if ticker and ticker in palavras:
+        ticker = ident if p.mercado in ("B3", "US") else None
+        # ticker so casa em MAIUSCULAS no titulo original: "VOO" e um ETF, "voo" e um helicoptero
+        if ticker and re.search(rf"(?<![A-Za-z0-9]){re.escape(ticker)}(?![A-Za-z0-9])", sem_acento(titulo)):
             out.append((ident, "ticker", 1.0))
             continue
         excluida = any(frase in titulo.lower() for frase in exclusoes.get(ident, []))
@@ -140,14 +141,21 @@ def salvar(db: Db, itens: list[dict], posicoes: list[Posicao]) -> dict:
     for it in itens:
         tn = normalizar_titulo(it["titulo"])
         if tn in vistos_titulos:
+            # ja existe: nao duplica, mas (re)casa - a carteira pode ter ganhado termos desde a ultima coleta
+            r = con.execute("SELECT id FROM noticias WHERE titulo_norm = ? ORDER BY id DESC LIMIT 1", (tn,)).fetchone()
+            nid = r["id"] if r else None
+        else:
+            cur = con.execute("INSERT OR IGNORE INTO noticias (url, titulo, fonte, publicada_em, coletada_em, titulo_norm) VALUES (?,?,?,?,?,?)",
+                              (it["url"], it["titulo"], it.get("fonte"), it.get("publicada_em"), agora_utc().isoformat(), tn))
+            if cur.rowcount == 0:
+                r = con.execute("SELECT id FROM noticias WHERE url = ?", (it["url"],)).fetchone()
+                nid = r["id"] if r else None
+            else:
+                vistos_titulos.add(tn)
+                novas += 1
+                nid = cur.lastrowid
+        if nid is None:
             continue
-        cur = con.execute("INSERT OR IGNORE INTO noticias (url, titulo, fonte, publicada_em, coletada_em, titulo_norm) VALUES (?,?,?,?,?,?)",
-                          (it["url"], it["titulo"], it.get("fonte"), it.get("publicada_em"), agora_utc().isoformat(), tn))
-        if cur.rowcount == 0:
-            continue
-        vistos_titulos.add(tn)
-        novas += 1
-        nid = cur.lastrowid
         for ident, metodo, score in casar(it["titulo"], posicoes):
             con.execute("INSERT OR IGNORE INTO noticia_ativo (noticia_id, ativo, metodo, score) VALUES (?,?,?,?)", (nid, ident, metodo, score))
             casadas += 1

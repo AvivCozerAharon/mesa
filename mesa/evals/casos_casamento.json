@@ -167,5 +167,19 @@
    "VALE3",
    "PETR4"
   ]
+ },
+ {
+  "titulo": "Helicóptero desaparece durante voo no interior de SP",
+  "esperados": []
+ },
+ {
+  "titulo": "Voo da Gol atrasa 3 horas em Congonhas",
+  "esperados": []
+ },
+ {
+  "titulo": "Apple (AAPL) sobe 2% após balanço",
+  "esperados": [
+   "AAPL"
+  ]
  }
 ]
