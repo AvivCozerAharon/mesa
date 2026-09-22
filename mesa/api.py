@@ -10,7 +10,10 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Response, UploadFi
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
+from mesa import gatilhos as gat
+from mesa import ia
 from mesa import job
+from mesa import noticias as noti
 from mesa.armazenamento import Consulta, Db
 from mesa.calendario import agora_brt
 from mesa.carteira import Carteira, Posicao, resumo, valorizar
@@ -198,9 +201,52 @@ def criar_app(cfg: Config, db: Db | None = None, consulta: Consulta | None = Non
     def operacao():
         return {"coletas": db.ultimas_coletas(60), "agora": agora_brt().isoformat()}
 
+    @app.get("/briefing", dependencies=[Depends(autenticado)])
+    def briefing(data: str | None = None):
+        return ia.briefing_do_dia(db, date.fromisoformat(data) if data else None)
+
+    @app.get("/noticias", dependencies=[Depends(autenticado)])
+    def noticias(posicao: int | None = None, dias: int = 7):
+        if posicao is None:
+            return noti.gerais(db, dias=dias, limite=40)
+        p = carteira.obter(posicao)
+        if p is None:
+            raise HTTPException(status_code=404, detail="posição não encontrada")
+        return noti.recentes(db, p.identificador, dias=dias, limite=40)
+
+    @app.get("/gatilhos/regras")
+    def regras():
+        return {"regras": list(gat.REGRAS), "descricoes": gat.DESCRICOES, "padrao": gat.PADRAO}
+
+    @app.get("/gatilhos", dependencies=[Depends(autenticado)])
+    def listar_gatilhos(posicao: int | None = None):
+        return gat.listar(db, posicao)
+
+    @app.post("/gatilhos", status_code=201, dependencies=[Depends(autenticado)])
+    def criar_gatilho(corpo: dict):
+        try:
+            gid = gat.criar(db, corpo.get("posicao_id"), corpo["regra"], corpo.get("parametros") or {})
+        except (KeyError, ValueError) as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        return {"id": gid}
+
+    @app.delete("/gatilhos/{gid}", dependencies=[Depends(autenticado)])
+    def excluir_gatilho(gid: int):
+        gat.excluir(db, gid)
+        return {"ok": True}
+
+    @app.get("/disparos", dependencies=[Depends(autenticado)])
+    def disparos(vistos: bool = False):
+        return gat.pendentes(db, incluir_vistos=vistos)
+
+    @app.post("/disparos/{did}/visto", dependencies=[Depends(autenticado)])
+    def visto(did: int):
+        gat.marcar_visto(db, did)
+        return {"ok": True}
+
     @app.post("/job/{nome}", dependencies=[Depends(autenticado)])
     def rodar_job(nome: str):
-        if nome not in ("manha", "fechamento"):
+        if nome not in ("manha", "fechamento", "briefing"):
             raise HTTPException(status_code=404, detail="job desconhecido")
         if not trava_job.acquire(blocking=False):
             raise HTTPException(status_code=409, detail="já há um job rodando")

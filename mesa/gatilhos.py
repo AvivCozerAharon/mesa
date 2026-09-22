@@ -197,3 +197,17 @@ def pendentes(db: Db, incluir_vistos: bool = False) -> list[dict]:
 def marcar_visto(db: Db, disparo_id: int) -> None:
     db.con.execute("UPDATE disparos SET visto = 1 WHERE id = ?", (disparo_id,))
     db.con.commit()
+
+
+def do_dia(db: Db, hoje: date) -> list[dict]:
+    """Todos os disparos registrados hoje (novos ou nao): e o que entra no briefing, para que
+    reexecutar o job no mesmo dia gere a mesma entrada (e nao chame a IA de novo)."""
+    rows = db.con.execute("""SELECT d.*, g.regra, g.parametros, p.ativo FROM disparos d JOIN gatilhos g ON g.id = d.gatilho_id
+                             LEFT JOIN posicoes p ON p.id = d.posicao_id WHERE d.data = ? ORDER BY d.id""", (hoje.isoformat(),)).fetchall()
+    out = []
+    for r in rows:
+        d = dict(r)
+        d["parametros"], d["detalhe"] = json.loads(d["parametros"]), json.loads(d["detalhe"])
+        d["descricao"] = DESCRICOES.get(d["regra"], d["regra"]).format(**{**d["parametros"], **d["detalhe"]})
+        out.append(d)
+    return out

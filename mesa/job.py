@@ -9,7 +9,7 @@ from datetime import date, datetime
 import pandas as pd
 
 from mesa.armazenamento import Consulta, Db, gravar_parquet
-from mesa.calendario import agora_brt, ultimo_pregao
+from mesa.calendario import agora_brt
 from mesa.carteira import Carteira, resumo, valorizar
 from mesa.config import Config
 from mesa.fontes import Contexto, executar
@@ -18,6 +18,10 @@ from mesa.fontes.cvm import Cadastro, InformeDiario, Lamina
 from mesa.fontes.tesouro import TesouroDireto
 from mesa.fontes.treasury_us import Treasury
 from mesa.fontes.yahoo import Yahoo
+from mesa import email as email_mod
+from mesa import gatilhos as gat
+from mesa import ia
+from mesa import noticias as noti
 from mesa.metricas import indice_cdi, metricas_fundo, metricas_posicao
 
 log = logging.getLogger("mesa.job")
@@ -179,12 +183,101 @@ def pares_do_fundo(consulta: Consulta, cnpj: str, info) -> pd.DataFrame | None:
     return tabela.sort_index().ffill()
 
 
-def manha(cfg: Config, agora: datetime | None = None) -> dict:
+def _etapa(db: Db, nome: str, hoje: date, fn) -> dict:
+    """Roda uma etapa do job registrando sucesso/erro em `coletas` (a mesma tabela da operacao)."""
+    import time
+    inicio = time.time()
+    try:
+        res = fn()
+        db.registrar_coleta(nome, hoje, res.get("n") if isinstance(res, dict) else None, int((time.time() - inicio) * 1000))
+        return {"ok": True, **(res if isinstance(res, dict) else {})}
+    except Exception as e:  # noqa: BLE001 - etapa com erro nao derruba as seguintes
+        log.exception("etapa %s falhou", nome)
+        db.registrar_coleta(nome, hoje, None, int((time.time() - inicio) * 1000), f"{type(e).__name__}: {e}"[:500])
+        return {"ok": False, "erro": str(e)}
+
+
+def coletar_noticias(db: Db, carteira: Carteira) -> dict:
+    pos = carteira.listar()
+    termos = sorted({t for p in pos for t in noti.termos(p)})
+    itens = noti.coletar_rss(termos)
+    r = noti.salvar(db, itens, pos)
+    return {"n": r["novas"], **r, "termos": len(termos)}
+
+
+def avaliar_gatilhos(db: Db, carteira: Carteira, hoje: date) -> dict:
+    metricas = db.metricas_recentes()
+    novos = []
+    for p in carteira.listar():
+        gat.garantir_padrao(db, p.id)
+        for d in gat.avaliar(db, p.id, metricas.get(p.id), noti.recentes(db, p.identificador, dias=2), hoje):
+            novos.append({**d, "ativo": p.ativo})
+    return {"n": len(novos), "novos": novos}
+
+
+def gerar_briefings(cfg: Config, db: Db, consulta: Consulta, carteira: Carteira, hoje: date, novos_disparos: list[dict], cliente=None) -> dict:
+    if cliente is None:
+        cliente = ia.ClienteOpenAI(cfg)  # levanta IAIndisponivel sem chave -> etapa registra erro
+    metricas = db.metricas_recentes()
+    por_pos = {}
+    for d in novos_disparos:
+        por_pos.setdefault(d["posicao_id"], []).append(d)
+    resultados = []
+    for p in carteira.listar()[: cfg.ia_max_posicoes_dia]:
+        tese = carteira.tese(p.id)
+        hist = carteira.historico_teses(p.id)
+        entrada = ia.montar_entrada({**p.para_dict(), "tese_em": hist[-1]["criada_em"][:10] if hist else None},
+                                    tese, metricas.get(p.id), noti.recentes(db, p.identificador), por_pos.get(p.id, []), hoje)
+        r = ia.gerar_briefing_posicao(cliente, db, cfg, p.para_dict(), entrada, hoje)
+        resultados.append({"ativo": p.ativo, "valido": r["valido"], "tese_continua": (r.get("saida") or {}).get("tese_continua"),
+                           "reaproveitado": r.get("reaproveitado", False), "erro": r.get("erro")})
+    fx, _ = cambio_atual(consulta)
+    val = valorizar(carteira.listar(), precos_atuais(consulta, carteira), fx, hoje)
+    res = resumo(val)
+    pesos = [{"ativo": row["ativo"], "peso_pct": round(row["peso"], 1) if row.get("peso") is not None and row["peso"] == row["peso"] else None,
+              "pnl_pct": round(row["pnl_pct"], 1) if row.get("pnl_pct") is not None and row["pnl_pct"] == row["pnl_pct"] else None}
+             for row in ([] if val.empty else val.to_dict("records"))]
+    entrada_c = {"data": hoje.isoformat(),
+                 "carteira": {"valor_brl": round(res["valor_brl"], 1), "custo_brl": round(res["custo_brl"], 1), "pnl_brl": round(res["pnl_brl"], 1),
+                              "por_tipo_brl": {k: round(v, 1) for k, v in res["por_tipo"].items()}, "sem_preco": res["sem_preco"]},
+                 "posicoes": [{"ativo": r["ativo"], "tese_continua": r["tese_continua"] or "indisponivel"} for r in resultados],
+                 "pesos": pesos,
+                 "gatilhos_disparados": [{"ativo": d["ativo"], "descricao": d["descricao"]} for d in novos_disparos]}
+    rc = ia.gerar_briefing_carteira(cliente, db, cfg, entrada_c, hoje)
+    validos = sum(1 for r in resultados if r["valido"])
+    return {"n": validos, "posicoes": resultados, "carteira_valida": bool(rc["valido"]), "custo_usd": ia.briefing_do_dia(db, hoje)["custo_usd"]}
+
+
+def enviar_email(cfg: Config, db: Db, consulta: Consulta, carteira: Carteira, hoje: date, novos_disparos: list[dict]) -> dict:
+    fx, _ = cambio_atual(consulta)
+    res = resumo(valorizar(carteira.listar(), precos_atuais(consulta, carteira), fx, hoje))
+    corpo = email_mod.corpo_briefing(ia.briefing_do_dia(db, hoje), novos_disparos, res)
+    enviado = email_mod.enviar(cfg, f"mesa — briefing {hoje.isoformat()}", corpo)
+    return {"n": 1 if enviado else 0, "enviado": enviado}
+
+
+def manha(cfg: Config, agora: datetime | None = None, cliente_ia=None, so_briefing: bool = False) -> dict:
     db, consulta = Db(cfg.db_path), Consulta(cfg.dados_dir)
     carteira = Carteira(db)
     ctx = contexto(cfg, carteira, agora)
-    coletas = coletar(cfg, db, fontes_manha(cfg, consulta), ctx)
-    return {"coletas": coletas, "calculo": calcular(cfg, db, consulta, carteira, ctx.agora)}
+    hoje = ctx.agora.date()
+    out = {}
+    if not so_briefing:
+        out["coletas"] = coletar(cfg, db, fontes_manha(cfg, consulta), ctx)
+        out["calculo"] = calcular(cfg, db, consulta, carteira, ctx.agora)
+    out["noticias"] = _etapa(db, "noticias", hoje, lambda: coletar_noticias(db, carteira))
+    gat_res = _etapa(db, "gatilhos", hoje, lambda: avaliar_gatilhos(db, carteira, hoje))
+    out["gatilhos"] = gat_res
+    novos = gat_res.get("novos", [])
+    do_dia = gat.do_dia(db, hoje)  # disparos do dia inteiro: reexecutar nao muda a entrada da IA
+    out["briefing"] = _etapa(db, "briefing", hoje, lambda: gerar_briefings(cfg, db, consulta, carteira, hoje, do_dia, cliente_ia))
+    out["email"] = _etapa(db, "email", hoje, lambda: enviar_email(cfg, db, consulta, carteira, hoje, novos))
+    return out
+
+
+def briefing(cfg: Config, agora: datetime | None = None, cliente_ia=None) -> dict:
+    """So noticias + gatilhos + briefing + e-mail (sem recoletar fontes)."""
+    return manha(cfg, agora, cliente_ia=cliente_ia, so_briefing=True)
 
 
 def fechamento(cfg: Config, agora: datetime | None = None) -> dict:
