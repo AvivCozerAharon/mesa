@@ -9,5 +9,68 @@
   "n": 12,
   "acertos": 12,
   "erros": []
+ },
+ "tese": {
+  "n": 8,
+  "concordancia": 1.0,
+  "validos": 8,
+  "detalhes": [
+   {
+    "nome": "dividendo reforca",
+    "esperado": "sim",
+    "obtido": "sim",
+    "valido": true,
+    "erro": null
+   },
+   {
+    "nome": "politica de precos muda",
+    "esperado": "revisar",
+    "obtido": "revisar",
+    "valido": true,
+    "erro": null
+   },
+   {
+    "nome": "sem nada",
+    "esperado": "nao_avaliavel",
+    "obtido": "nao_avaliavel",
+    "valido": true,
+    "erro": null
+   },
+   {
+    "nome": "gatilho de queda",
+    "esperado": "revisar",
+    "obtido": "revisar",
+    "valido": true,
+    "erro": null
+   },
+   {
+    "nome": "noticia irrelevante",
+    "esperado": "sim",
+    "obtido": "sim",
+    "valido": true,
+    "erro": null
+   },
+   {
+    "nome": "vacancia sobe",
+    "esperado": "revisar",
+    "obtido": "revisar",
+    "valido": true,
+    "erro": null
+   },
+   {
+    "nome": "fundo bate cdi",
+    "esperado": "sim",
+    "obtido": "sim",
+    "valido": true,
+    "erro": null
+   },
+   {
+    "nome": "gestor sai",
+    "esperado": "revisar",
+    "obtido": "revisar",
+    "valido": true,
+    "erro": null
+   }
+  ]
  }
 }

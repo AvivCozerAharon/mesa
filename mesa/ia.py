@@ -184,9 +184,9 @@ def _hash(obj) -> str:
     return hashlib.sha1(json.dumps(obj, sort_keys=True, ensure_ascii=False, default=str).encode()).hexdigest()
 
 
-def _existente(db: Db, data: date, posicao_id: int | None, h: str) -> dict | None:
-    r = db.con.execute("SELECT * FROM briefings WHERE data = ? AND posicao_id IS ? AND valido = 1 ORDER BY id DESC LIMIT 1",
-                       (data.isoformat(), posicao_id)).fetchone()
+def _existente(db: Db, data: date, posicao_id: int | None, h: str, modelo: str) -> dict | None:
+    r = db.con.execute("SELECT * FROM briefings WHERE data = ? AND posicao_id IS ? AND valido = 1 AND modelo = ? ORDER BY id DESC LIMIT 1",
+                       (data.isoformat(), posicao_id, modelo)).fetchone()
     if r and json.loads(r["entrada"]).get("_hash") == h:
         d = dict(r)
         d["saida"] = json.loads(d["saida"]) if d["saida"] else None
@@ -197,7 +197,7 @@ def _existente(db: Db, data: date, posicao_id: int | None, h: str) -> dict | Non
 
 def _gerar(cliente, db: Db, cfg: Config, sistema: str, entrada: dict, chaves: dict, data: date, posicao_id: int | None) -> dict:
     h = _hash(entrada)
-    pronto = _existente(db, data, posicao_id, h)
+    pronto = _existente(db, data, posicao_id, h, getattr(cliente, "modelo", "?"))  # cache por modelo: briefing de outro modelo nao vale
     if pronto:
         return pronto
     entrada_gravada = {**entrada, "_hash": h}
