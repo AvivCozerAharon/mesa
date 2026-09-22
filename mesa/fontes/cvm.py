@@ -6,6 +6,7 @@ bruto em `dados/cvm/raw/` (só o mês corrente é rebaixado) e filtramos para os
 os pares: fundos da mesma classe com PL acima de um mínimo, que servem de comparação. Nomenclatura
 nova da CVM (2025+): `CNPJ_FUNDO_CLASSE`, `TP_FUNDO_CLASSE`.
 """
+import csv
 import io
 import os
 import re
@@ -18,7 +19,8 @@ from mesa.fontes import Coleta, Contexto, http_get
 
 BASE = "https://dados.cvm.gov.br/dados/FI"
 URL_INFORME = BASE + "/DOC/INF_DIARIO/DADOS/inf_diario_fi_{aaaamm}.zip"
-URL_CADASTRO = BASE + "/CAD/DADOS/cad_fi.csv"
+URL_CADASTRO = BASE + "/CAD/DADOS/registro_fundo_classe.zip"
+URL_LAMINA = BASE + "/DOC/LAMINA/DADOS/lamina_fi_{aaaamm}.zip"
 PL_MINIMO_PARES = 50_000_000
 MAX_PARES_POR_CLASSE = 400
 
@@ -37,22 +39,38 @@ def meses_ate(ref: date, n: int) -> list[str]:
     return list(reversed(out))
 
 
-def parse_cadastro(texto: str) -> pd.DataFrame:
-    df = pd.read_csv(io.StringIO(texto), sep=";", dtype=str, encoding_errors="ignore")
-    col_cnpj = "CNPJ_FUNDO" if "CNPJ_FUNDO" in df.columns else "CNPJ_FUNDO_CLASSE"
+def parse_cadastro(zip_bytes: bytes) -> pd.DataFrame:
+    """registro_fundo_classe.zip (regime RCVM 175). O cad_fi.csv legado mostra 99 % dos fundos como
+    CANCELADA desde a migração — quem usa ele acha que o mercado acabou."""
+    ler = lambda nome: pd.read_csv(io.BytesIO(zipfile.ZipFile(io.BytesIO(zip_bytes)).read(nome)), sep=";", dtype=str,  # noqa: E731
+                                   encoding="latin-1", quoting=csv.QUOTE_NONE, on_bad_lines="skip", engine="python")
+    classe, fundo = ler("registro_classe.csv"), ler("registro_fundo.csv")
+    gestor = fundo.drop_duplicates("ID_Registro_Fundo", keep="last").set_index("ID_Registro_Fundo")["Gestor"]
     out = pd.DataFrame({
-        "cnpj": df[col_cnpj].map(so_digitos),
-        "nome": df["DENOM_SOCIAL"].str.strip(),
-        "classe": df.get("CLASSE", pd.Series([""] * len(df))).fillna(""),
-        "classe_anbima": df.get("CLASSE_ANBIMA", pd.Series([""] * len(df))).fillna(""),
-        "gestor": df.get("GESTOR", pd.Series([""] * len(df))).fillna(""),
-        "situacao": df.get("SIT", pd.Series([""] * len(df))).fillna(""),
-        "publico_alvo": df.get("PUBLICO_ALVO", pd.Series([""] * len(df))).fillna(""),
-        "taxa_adm": pd.to_numeric(df.get("TAXA_ADM"), errors="coerce"),
-        "taxa_perf": pd.to_numeric(df.get("TAXA_PERFM"), errors="coerce"),
-        "pl": pd.to_numeric(df.get("VL_PATRIM_LIQ"), errors="coerce"),
-        "rentab_fundo": df.get("RENTAB_FUNDO", pd.Series([""] * len(df))).fillna(""),
+        "cnpj": classe["CNPJ_Classe"].map(so_digitos),
+        "nome": classe["Denominacao_Social"].fillna("").str.strip(),
+        "classe": classe["Classificacao"].fillna(""),
+        "tipo_classe": classe["Tipo_Classe"].fillna(""),
+        "classe_anbima": classe["Classificacao_Anbima"].fillna(""),
+        "situacao": classe["Situacao"].fillna(""),
+        "publico_alvo": classe["Publico_Alvo"].fillna(""),
+        "pl": pd.to_numeric(classe["Patrimonio_Liquido"], errors="coerce"),
+        "data_pl": classe["Data_Patrimonio_Liquido"].fillna(""),
+        "gestor": classe["ID_Registro_Fundo"].map(gestor).fillna(""),
     })
+    return out[out["cnpj"].str.len() == 14].drop_duplicates("cnpj", keep="last")
+
+
+def parse_lamina(zip_bytes: bytes, data_ref: str) -> pd.DataFrame:
+    z = zipfile.ZipFile(io.BytesIO(zip_bytes))
+    nome = next(n for n in z.namelist() if n.startswith("lamina_fi_") and "_" not in n[len("lamina_fi_"):])
+    df = pd.read_csv(io.BytesIO(z.read(nome)), sep=";", dtype=str, encoding="latin-1", quoting=csv.QUOTE_NONE,
+                     on_bad_lines="skip", engine="python")
+    col = "CNPJ_FUNDO_CLASSE" if "CNPJ_FUNDO_CLASSE" in df.columns else "CNPJ_FUNDO"
+    out = pd.DataFrame({"cnpj": df[col].map(so_digitos), "taxa_adm": pd.to_numeric(df.get("TAXA_ADM"), errors="coerce"),
+                        "taxa_perf": pd.to_numeric(df.get("TAXA_PERFM"), errors="coerce"),
+                        "benchmark_declarado": df.get("INDICE_REFER", pd.Series([""] * len(df))).fillna("").str.strip(),
+                        "data_ref": data_ref})
     return out[out["cnpj"].str.len() == 14].drop_duplicates("cnpj", keep="last")
 
 
@@ -77,6 +95,8 @@ def parse_informe(csv_bytes: bytes, cnpjs: set[str]) -> pd.DataFrame:
 def escolher_pares(cadastro: pd.DataFrame, cnpjs: list[str]) -> set[str]:
     """Fundos ativos da mesma classe dos fundos da carteira, com PL relevante (limitado por classe)."""
     ativos = cadastro[cadastro["situacao"].str.upper().str.contains("FUNCIONAMENTO", na=False)]
+    if "publico_alvo" in ativos.columns:  # pares comparaveis: mesmo publico (geral vs qualificado) quando informado
+        pass
     classes = set(cadastro[cadastro["cnpj"].isin(cnpjs)]["classe"]) - {""}
     pares = set()
     for classe in classes:
@@ -92,8 +112,27 @@ class Cadastro:
 
     def coletar(self, ctx: Contexto) -> tuple[pd.DataFrame, Coleta]:
         r = http_get(ctx)(URL_CADASTRO)
-        df = parse_cadastro(r.content.decode("latin-1"))
+        df = parse_cadastro(r.content)
         return df, Coleta(self.nome, True)
+
+
+class Lamina:
+    """Taxas e benchmark declarado: ultimas 12 laminas mensais, fica a mais recente por fundo."""
+    nome = "cvm_lamina"
+    tabela = "fundos_taxas"
+
+    def coletar(self, ctx: Contexto) -> tuple[pd.DataFrame, Coleta]:
+        get = http_get(ctx)
+        partes = []
+        for aaaamm in meses_ate(ctx.agora.date(), 12):
+            try:
+                partes.append(parse_lamina(get(URL_LAMINA.format(aaaamm=aaaamm)).content, aaaamm))
+            except Exception:  # noqa: BLE001 - mes sem lamina publicada
+                continue
+        if not partes:
+            return pd.DataFrame(), Coleta(self.nome, False, erro="nenhuma lamina disponivel")
+        df = pd.concat(partes, ignore_index=True).sort_values("data_ref").drop_duplicates("cnpj", keep="last")
+        return df, Coleta(self.nome, True, detalhe={"meses": len(partes)})
 
 
 class InformeDiario:
@@ -137,7 +176,8 @@ class InformeDiario:
                 for nome in zf.namelist():
                     if nome.lower().endswith(".csv"):
                         partes.append(parse_informe(zf.read(nome), alvo))
-        df = pd.concat([p for p in partes if not p.empty], ignore_index=True) if partes else pd.DataFrame()
+        partes = [p for p in partes if not p.empty]
+        df = pd.concat(partes, ignore_index=True) if partes else pd.DataFrame()
         return df, Coleta(self.nome, True, detalhe={"meses": len(meses), "zips_baixados": baixados,
                                                     "fundos": int(df["cnpj"].nunique()) if not df.empty else 0,
                                                     "pares": len(alvo) - len(set(cnpjs))})

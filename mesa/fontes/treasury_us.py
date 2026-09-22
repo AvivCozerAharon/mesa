@@ -1,6 +1,7 @@
 """Curva de juros dos EUA (par yield curve) do Treasury.gov, CSV por ano. FRED bloqueia acesso
 sem chave; o Treasury publica o mesmo dado sem cadastro."""
 import io
+import os
 
 import pandas as pd
 
@@ -19,8 +20,9 @@ def parse(texto: str) -> pd.DataFrame:
         d = pd.to_datetime(r["Date"]).date()
         for col, anos in PRAZOS.items():
             if col in df.columns and pd.notna(r[col]):
-                linhas.append({"pais": "US", "data": d, "vencimento": anos, "titulo": col, "taxa": float(r[col]),
-                               "taxa_venda": None, "pu": None})
+                linhas.append({"pais": "US", "data": d, "vencimento": (pd.Timestamp(d) + pd.DateOffset(days=round(anos * 365.25))).date(),
+                               "prazo_anos": float(anos), "titulo": col, "taxa": float(r[col]),
+                               "taxa_venda": float("nan"), "pu": float("nan")})
     return pd.DataFrame(linhas)
 
 
@@ -30,7 +32,18 @@ class Treasury:
 
     def coletar(self, ctx: Contexto) -> tuple[pd.DataFrame, Coleta]:
         get = http_get(ctx)
-        anos = range(ctx.agora.year - ctx.anos_precos, ctx.agora.year + 1)
-        partes = [parse(get(URL.format(ano=a)).text) for a in anos]
+        pasta = os.path.join(ctx.dados_dir, "treasury_us", "raw")
+        os.makedirs(pasta, exist_ok=True)
+        partes = []
+        for ano in range(ctx.agora.year - ctx.anos_precos, ctx.agora.year + 1):
+            caminho = os.path.join(pasta, f"{ano}.csv")
+            # anos passados nao mudam: baixa uma vez e guarda o CSV bruto (o site leva ~20 s por ano)
+            if ano == ctx.agora.year or not os.path.exists(caminho):
+                texto = get(URL.format(ano=ano)).text
+                with open(caminho, "w", encoding="utf-8") as fh:
+                    fh.write(texto)
+            else:
+                texto = open(caminho, encoding="utf-8").read()
+            partes.append(parse(texto))
         df = pd.concat([p for p in partes if not p.empty], ignore_index=True) if partes else pd.DataFrame()
         return df, Coleta(self.nome, True)

@@ -8,7 +8,7 @@ import pytest
 
 from mesa.fontes import Coleta, Contexto, executar
 from mesa.fontes.bcb import SGS, parse_serie
-from mesa.fontes.cvm import Cadastro, InformeDiario, escolher_pares, meses_ate, parse_cadastro
+from mesa.fontes.cvm import Cadastro, InformeDiario, Lamina, escolher_pares, meses_ate, parse_cadastro
 from mesa.fontes.tesouro import TesouroDireto
 from mesa.fontes.treasury_us import Treasury
 from mesa.fontes.yahoo import Yahoo, normalizar
@@ -61,21 +61,22 @@ def test_executar_transforma_excecao_em_coleta(tmp_path):
 
 
 def test_cvm_cadastro_e_pares(tmp_path):
-    get = lambda url, **k: Resp((FX / "cad_fi.csv").read_bytes())  # noqa: E731
+    get = lambda url, **k: Resp((FX / "registro_fundo_classe.zip").read_bytes())  # noqa: E731
     df, col = executar(Cadastro(), ctx(tmp_path, get))
-    assert col.ok and len(df) == 4 and df.set_index("cnpj").loc["11222333000181", "taxa_adm"] == 2.0
+    assert col.ok and len(df) == 4 and df.set_index("cnpj").loc["11222333000181", "gestor"] == "GESTORA X"
+    assert df.set_index("cnpj").loc["99887766000155", "classe"] == "Multimercado"
+    dl, cl = executar(Lamina(), ctx(tmp_path, lambda u, **k: Resp((FX / "lamina_fi_202608.zip").read_bytes())))
+    assert cl.ok and dl.set_index("cnpj").loc["11222333000181", "taxa_adm"] == 2.0 and dl.iloc[0]["benchmark_declarado"] == "CDI"
     pares = escolher_pares(df, ["11222333000181"])
     assert pares == {"99887766000155"}  # PL minimo exclui o pequeno; classe exclui acoes; o proprio fundo e alvo, nao par
 
 
 def test_cvm_informe_filtra_carteira_e_pares(tmp_path):
     def get(url, **k):
-        if url.endswith("cad_fi.csv"):
-            return Resp((FX / "cad_fi.csv").read_bytes())
         return Resp((FX / "inf_diario_fi_202608.zip").read_bytes())
     c = ctx(tmp_path, get, cnpjs=["11.222.333/0001-81"])
     c.agora = datetime(2026, 8, 20, 9, 0, tzinfo=BRT)
-    fonte = InformeDiario(cadastro_fn=lambda: parse_cadastro((FX / "cad_fi.csv").read_text(encoding="latin-1")))
+    fonte = InformeDiario(cadastro_fn=lambda: parse_cadastro((FX / "registro_fundo_classe.zip").read_bytes()))
     df, col = executar(fonte, c)
     assert col.ok and set(df["cnpj"]) == {"11222333000181", "99887766000155"} and len(df) == 3
     assert (tmp_path / "cvm" / "raw" / "inf_diario_fi_202608.zip").exists()
@@ -101,7 +102,8 @@ def test_tesouro_e_treasury(tmp_path):
     df, col = executar(TesouroDireto(), ctx(tmp_path, lambda u, **k: Resp((FX / "tesouro.csv").read_bytes())))
     assert col.ok and len(df) == 2 and df["taxa"].max() == 7.12  # 2019 fica fora (anos_precos=1)
     df2, col2 = executar(Treasury(), ctx(tmp_path, lambda u, **k: Resp((FX / "treasury.csv").read_bytes())))
-    assert col2.ok and df2[(df2["data"] == date(2026, 9, 21)) & (df2["vencimento"] == 10)]["taxa"].iloc[0] == 4.96
+    assert col2.ok and df2[(df2["data"] == date(2026, 9, 21)) & (df2["prazo_anos"] == 10)]["taxa"].iloc[0] == 4.96
+    assert df["prazo_anos"].iloc[0] > 4 and str(df2["vencimento"].iloc[0]).startswith("2026-10")
 
 
 @pytest.mark.integration

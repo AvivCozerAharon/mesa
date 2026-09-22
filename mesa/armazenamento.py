@@ -19,7 +19,7 @@ VIEWS = {
     "precos": ("precos", ["ativo", "data"]),
     "cotas_fundos": ("cotas_fundos", ["cnpj", "data"]),
     "benchmarks": ("benchmarks", ["nome", "data"]),
-    "curvas": ("curvas", ["pais", "data", "vencimento"]),
+    "curvas": ("curvas", ["pais", "data", "titulo", "vencimento"]),
     "fundos_cadastro": ("fundos_cadastro", ["cnpj"]),
     "fundos_taxas": ("fundos_taxas", ["cnpj"]),
 }
@@ -29,10 +29,13 @@ def agora_utc() -> datetime:
     return datetime.now(timezone.utc)
 
 
-def gravar_parquet(dados_dir: str, fonte: str, data_coleta: date, df: pd.DataFrame) -> Path:
-    pasta = Path(dados_dir) / fonte
+def gravar_parquet(dados_dir: str, tabela: str, data_coleta: date, df: pd.DataFrame, fonte: str | None = None) -> Path:
+    """Arquivo por (tabela, fonte, data): duas fontes na mesma tabela (Tesouro e Treasury em `curvas`)
+    não podem sobrescrever uma à outra — foi o primeiro bug de produção."""
+    pasta = Path(dados_dir) / tabela
     pasta.mkdir(parents=True, exist_ok=True)
-    destino = pasta / f"{data_coleta.isoformat()}.parquet"
+    prefixo = f"{fonte}_" if fonte else ""
+    destino = pasta / f"{prefixo}{data_coleta.isoformat()}.parquet"
     df = df.copy()
     if "coletado_em" not in df.columns:
         df["coletado_em"] = agora_utc()

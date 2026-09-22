@@ -1,0 +1,8 @@
+ativo,tipo,identificador,quantidade,preco_medio,data_compra,tese
+,acao,PETR4,100,32.10,2025-02-14,"Petróleo acima de US$ 70 e dividendos altos; sair se a política de preços mudar"
+,acao,VALE3,50,58.40,2025-05-20,"Minério + dividendo; China é o risco"
+,fii,HGLG11,10,160.00,2024-11-05,"Galpões logísticos, vacância baixa"
+,acao_us,AAPL,3,190.00,2025-06-02,"Serviços crescendo; múltiplo alto é o risco"
+,etf_us,VOO,2,480.00,2025-01-10,"Exposição ao S&P; longo prazo"
+CSHG Verde 30 FIC FIM,fundo,22.215.116/0001-80,100,300.00,2024-08-01,"Descorrelação com bolsa; gestor com histórico longo"
+,tesouro,Tesouro IPCA+ 2035,2,2200.00,2025-03-03,"Juro real acima de 6 %"

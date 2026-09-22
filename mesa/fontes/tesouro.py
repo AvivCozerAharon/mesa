@@ -19,12 +19,13 @@ def parse(texto: str, desde) -> pd.DataFrame:
     if df.empty:
         return pd.DataFrame()
     num = lambda c: pd.to_numeric(df[c].str.replace(",", "."), errors="coerce")  # noqa: E731
-    venc = pd.to_datetime(df["Data Vencimento"], format="%d/%m/%Y").dt.date
+    venc = pd.to_datetime(df["Data Vencimento"], format="%d/%m/%Y")
+    base_dt = pd.to_datetime(df["Data Base"], format="%d/%m/%Y")
     return pd.DataFrame({
-        "pais": "BR", "data": pd.to_datetime(df["Data Base"], format="%d/%m/%Y").dt.date.values,
-        "vencimento": venc.values, "titulo": df["Tipo Titulo"].str.strip().values,
-        "taxa": num("Taxa Compra Manha").values, "taxa_venda": num("Taxa Venda Manha").values,
-        "pu": num("PU Base Manha").values,
+        "pais": "BR", "data": base_dt.dt.date.values, "vencimento": venc.dt.date.values,
+        "prazo_anos": ((venc - base_dt).dt.days / 365.25).values, "titulo": df["Tipo Titulo"].str.strip().values,
+        "taxa": num("Taxa Compra Manha").values, "taxa_venda": num("Taxa Venda Manha").astype(float).values,
+        "pu": num("PU Base Manha").astype(float).values,
     }).dropna(subset=["taxa"])
 
 
