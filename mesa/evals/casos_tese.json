@@ -1,0 +1,81 @@
+[
+ {
+  "nome": "dividendo reforca",
+  "tese": "Petróleo acima de US$ 70 e dividendos altos",
+  "noticias": [
+   "Petrobras anuncia dividendos extraordinários de R$ 2,00 por ação"
+  ],
+  "gatilhos": [],
+  "esperado": "sim"
+ },
+ {
+  "nome": "politica de precos muda",
+  "tese": "Petróleo alto e dividendos; sair se a política de preços mudar",
+  "noticias": [
+   "Governo anuncia mudança na política de preços da Petrobras e congelamento do diesel"
+  ],
+  "gatilhos": [],
+  "esperado": "revisar"
+ },
+ {
+  "nome": "sem nada",
+  "tese": "Minério + dividendo",
+  "noticias": [],
+  "gatilhos": [],
+  "esperado": "nao_avaliavel"
+ },
+ {
+  "nome": "gatilho de queda",
+  "tese": "Minério + dividendo; China é o risco",
+  "noticias": [
+   "Importações de minério da China caem 15% no ano"
+  ],
+  "gatilhos": [
+   {
+    "regra": "queda_desde_compra",
+    "descricao": "caiu 15 % ou mais desde a compra",
+    "detalhe": {
+     "queda_pct": -18.0,
+     "limite": 15
+    }
+   }
+  ],
+  "esperado": "revisar"
+ },
+ {
+  "nome": "noticia irrelevante",
+  "tese": "Galpões logísticos, vacância baixa",
+  "noticias": [
+   "HGLG11 anuncia rendimento de R$ 1,10 por cota"
+  ],
+  "gatilhos": [],
+  "esperado": "sim"
+ },
+ {
+  "nome": "vacancia sobe",
+  "tese": "Galpões logísticos, vacância baixa",
+  "noticias": [
+   "HGLG11 informa saída de inquilino e vacância sobe para 12%"
+  ],
+  "gatilhos": [],
+  "esperado": "revisar"
+ },
+ {
+  "nome": "fundo bate cdi",
+  "tese": "Descorrelação com bolsa; gestor com histórico longo",
+  "noticias": [
+   "Fundo Verde tem melhor mês do ano e bate CDI"
+  ],
+  "gatilhos": [],
+  "esperado": "sim"
+ },
+ {
+  "nome": "gestor sai",
+  "tese": "Gestor com histórico longo",
+  "noticias": [
+   "Gestor principal deixa a Verde Asset após 20 anos"
+  ],
+  "gatilhos": [],
+  "esperado": "revisar"
+ }
+]

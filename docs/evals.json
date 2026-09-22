@@ -1,0 +1,13 @@
+{
+ "casamento": {
+  "n": 30,
+  "precisao": 1.0,
+  "recall": 1.0,
+  "erros": []
+ },
+ "validacao": {
+  "n": 12,
+  "acertos": 12,
+  "erros": []
+ }
+}

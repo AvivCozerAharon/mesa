@@ -1,0 +1,175 @@
+[
+ {
+  "nome": "boa",
+  "saida": {
+   "situacao": "PETR4 a 48.0, 49.5% acima do preço médio; 12 meses +69.5% contra +20.0% do IBOV.",
+   "tese_continua": "sim",
+   "justificativa": "Dividendo anunciado reforça a tese [N1].",
+   "citacoes": [
+    "N1"
+   ],
+   "pontos_de_atencao": [
+    "A 5.0% do topo de 52 semanas"
+   ]
+  },
+  "valida": true
+ },
+ {
+  "nome": "citacao inexistente",
+  "saida": {
+   "situacao": "PETR4 a 48.0, 49.5% acima do preço médio; 12 meses +69.5% contra +20.0% do IBOV.",
+   "tese_continua": "sim",
+   "justificativa": "Dividendo anunciado reforça a tese [N1].",
+   "citacoes": [
+    "N4"
+   ],
+   "pontos_de_atencao": [
+    "A 5.0% do topo de 52 semanas"
+   ]
+  },
+  "valida": false
+ },
+ {
+  "nome": "texto cita sem listar",
+  "saida": {
+   "situacao": "PETR4 a 48.0, 49.5% acima do preço médio; 12 meses +69.5% contra +20.0% do IBOV.",
+   "tese_continua": "sim",
+   "justificativa": "Conforme [N1].",
+   "citacoes": [],
+   "pontos_de_atencao": [
+    "A 5.0% do topo de 52 semanas"
+   ]
+  },
+  "valida": false
+ },
+ {
+  "nome": "numero inventado",
+  "saida": {
+   "situacao": "PETR4 caiu 37.0% no mês.",
+   "tese_continua": "sim",
+   "justificativa": "Dividendo anunciado reforça a tese [N1].",
+   "citacoes": [
+    "N1"
+   ],
+   "pontos_de_atencao": [
+    "A 5.0% do topo de 52 semanas"
+   ]
+  },
+  "valida": false
+ },
+ {
+  "nome": "recomendacao",
+  "saida": {
+   "situacao": "PETR4 a 48.0, 49.5% acima do preço médio; 12 meses +69.5% contra +20.0% do IBOV.",
+   "tese_continua": "sim",
+   "justificativa": "Dividendo anunciado reforça a tese [N1].",
+   "citacoes": [
+    "N1"
+   ],
+   "pontos_de_atencao": [
+    "Venda metade agora"
+   ]
+  },
+  "valida": false
+ },
+ {
+  "nome": "recomendacao sutil",
+  "saida": {
+   "situacao": "PETR4 a 48.0, 49.5% acima do preço médio; 12 meses +69.5% contra +20.0% do IBOV.",
+   "tese_continua": "sim",
+   "justificativa": "Mantenha a posição [N1].",
+   "citacoes": [
+    "N1"
+   ],
+   "pontos_de_atencao": [
+    "A 5.0% do topo de 52 semanas"
+   ]
+  },
+  "valida": false
+ },
+ {
+  "nome": "enum errado",
+  "saida": {
+   "situacao": "PETR4 a 48.0, 49.5% acima do preço médio; 12 meses +69.5% contra +20.0% do IBOV.",
+   "tese_continua": "talvez",
+   "justificativa": "Dividendo anunciado reforça a tese [N1].",
+   "citacoes": [
+    "N1"
+   ],
+   "pontos_de_atencao": [
+    "A 5.0% do topo de 52 semanas"
+   ]
+  },
+  "valida": false
+ },
+ {
+  "nome": "campo faltando",
+  "saida": {
+   "situacao": "PETR4 a 48.0, 49.5% acima do preço médio; 12 meses +69.5% contra +20.0% do IBOV.",
+   "tese_continua": "sim",
+   "justificativa": "Dividendo anunciado reforça a tese [N1].",
+   "citacoes": [
+    "N1"
+   ]
+  },
+  "valida": false
+ },
+ {
+  "nome": "numero arredondado ok",
+  "saida": {
+   "situacao": "PETR4 a 48, retorno de 49.5% desde a compra.",
+   "tese_continua": "sim",
+   "justificativa": "Dividendo anunciado reforça a tese [N1].",
+   "citacoes": [
+    "N1"
+   ],
+   "pontos_de_atencao": [
+    "A 5.0% do topo de 52 semanas"
+   ]
+  },
+  "valida": true
+ },
+ {
+  "nome": "inteiro pequeno ok",
+  "saida": {
+   "situacao": "PETR4 a 48.0, 49.5% acima do preço médio; 12 meses +69.5% contra +20.0% do IBOV.",
+   "tese_continua": "sim",
+   "justificativa": "Dividendo anunciado reforça a tese [N1].",
+   "citacoes": [
+    "N1"
+   ],
+   "pontos_de_atencao": [
+    "3 pontos de atenção em 2 semanas"
+   ]
+  },
+  "valida": true
+ },
+ {
+  "nome": "sem noticia deve ser nao_avaliavel",
+  "sem_noticias": true,
+  "saida": {
+   "situacao": "PETR4 a 48.0, 49.5% acima do preço médio; 12 meses +69.5% contra +20.0% do IBOV.",
+   "tese_continua": "sim",
+   "justificativa": "ok",
+   "citacoes": [],
+   "pontos_de_atencao": [
+    "A 5.0% do topo de 52 semanas"
+   ]
+  },
+  "valida": false
+ },
+ {
+  "nome": "sem noticia nao_avaliavel ok",
+  "sem_noticias": true,
+  "saida": {
+   "situacao": "PETR4 a 48.0, 49.5% acima do preço médio; 12 meses +69.5% contra +20.0% do IBOV.",
+   "tese_continua": "nao_avaliavel",
+   "justificativa": "Sem notícias.",
+   "citacoes": [],
+   "pontos_de_atencao": [
+    "A 5.0% do topo de 52 semanas"
+   ]
+  },
+  "valida": true
+ }
+]
