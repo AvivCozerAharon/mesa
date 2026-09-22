@@ -12,6 +12,9 @@ class Config:
     senha: str = ""                      # MESA_SENHA: vazio = sem login (só para dev local)
     openai_api_key: str = ""
     openai_modelo: str = "gpt-5-mini"
+    openai_preco_in: float = 0.0          # US$ por 1M tokens de entrada (para o custo por briefing)
+    openai_preco_out: float = 0.0
+    ia_max_posicoes_dia: int = 30
     fuso: str = "America/Sao_Paulo"
     smtp_host: str = ""
     smtp_porta: int = 587
@@ -35,7 +38,9 @@ class Config:
                 bruto = env.get("OPENAI_API_KEY")
             if bruto is None or bruto == "":
                 continue
-            if f.type is int:
+            if f.type is float:
+                valores[f.name] = float(bruto)
+            elif f.type is int:
                 valores[f.name] = int(bruto)
             elif f.type is bool:
                 valores[f.name] = bruto.strip().lower() in ("1", "true", "sim", "yes")
