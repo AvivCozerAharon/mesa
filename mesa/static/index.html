@@ -430,7 +430,9 @@ async function selecionar(id) {
   if (id == null) return;
   sel = id;
   [...$('posicoes').children].forEach(li => li.setAttribute('aria-current', +li.dataset.id === id));
-  const a = await api('/ativo/' + id), m = a.metricas || {}, p = carteira.posicoes.find(x => x.id === id) || {};
+  const [a, ns, gs] = await Promise.all([api('/ativo/' + id), api('/noticias?posicao=' + id), api('/gatilhos?posicao=' + id)]);
+  if (sel !== id) return;  // trocou de posição no meio do caminho: a resposta velha não pinta mais nada
+  const m = a.metricas || {}, p = carteira.posicoes.find(x => x.id === id) || {};
   ['ativoGrafico','ativoMetricas','ativoTese','ativoNoticias','ativoGatilhos','ativoCompras','ativoEditar'].forEach(x => $(x).hidden = false);
   const casas = a.tipo === 'fundo' ? 4 : 2;
   $('ativoCab').innerHTML = `<div class="titulo"><h2>${esc(a.ativo)}</h2>
@@ -497,12 +499,10 @@ async function selecionar(id) {
       </div></div>`;
   } else $('teseVeredito').innerHTML = `<p class="fraco" style="font-size:14px">${bp ? 'O briefing de hoje não passou na checagem: ' + esc(bp.erro||'') : 'Sem briefing de hoje para esta posição.'}</p>`;
 
-  const ns = await api('/noticias?posicao=' + id);
   $('notN').textContent = ns.length || '';
   $('noticias').innerHTML = ns.length ? ns.map(n => `<li><a href="${esc(n.url)}" target="_blank" rel="noopener">${esc(n.titulo)}</a>
     <div class="meta">${esc(n.fonte||'')} · ${(n.publicada_em||'').slice(0,10)} · casou por ${esc(n.metodo)}</div></li>`).join('')
     : '<li class="fraco" style="font-size:14px">Nada casou com esta posição. Ajuste os termos de notícia ali embaixo se ela tem nome difícil.</li>';
-  const gs = await api('/gatilhos?posicao=' + id);
   $('gatilhos').innerHTML = gs.length ? gs.map(g => `<li style="display:flex;justify-content:space-between;gap:10px;align-items:baseline">
     <span>${esc(g.descricao || g.regra)}${g.posicao_id==null?' <span class="fraco">(vale para tudo)</span>':''}</span>
     <button class="leve" data-g="${g.id}">remover</button></li>`).join('') : '<li class="fraco" style="font-size:14px">Sem gatilhos além dos padrão.</li>';
@@ -672,17 +672,33 @@ function posicionarSugestoes() {
 }
 addEventListener('resize', posicionarSugestoes);
 $('nova').addEventListener('scroll', posicionarSugestoes, true);
+let buscaEmVoo = null, buscaSeq = 0;
 $('nBusca').addEventListener('input', () => {
   clearTimeout(atraso);
   const q = $('nBusca').value.trim();
   if (q.length < 2) { sugestoes = []; marcado = -1; pintarSugestoes(); return; }
   atraso = setTimeout(async () => {
-    try { const r = await api('/buscar?q=' + encodeURIComponent(q));
+    buscaEmVoo?.abort();                  // a busca da tecla anterior não interessa mais
+    const ctrl = new AbortController(), seq = ++buscaSeq;
+    buscaEmVoo = ctrl;
+    const url = f => '/buscar?fontes=' + f + '&q=' + encodeURIComponent(q);
+    // O disco responde em ~50 ms e o Yahoo em ~400 ms: pinta fundo e Tesouro na hora, encaixa o
+    // ticker quando chegar. Digitar sem esperar a rede é o que faz a busca parecer instantânea.
+    const local = api(url('locais'), {signal: ctrl.signal}).then(r => {
+      if (seq !== buscaSeq) return;
       sugestoes = r.itens; marcado = r.itens.length ? 0 : -1; pintarSugestoes();
-      if (r.avisos.length) $('nAviso').textContent = 'busca de ticker indisponível agora (' + r.avisos.join(', ') + ') — fundos e Tesouro seguem funcionando';
-      else $('nAviso').textContent = '';
-    } catch (e) { $('nAviso').textContent = e.message; }
-  }, 220);
+    });
+    const remoto = api(url('tickers'), {signal: ctrl.signal}).then(r => {
+      if (seq !== buscaSeq) return;
+      sugestoes = r.itens.concat(sugestoes.filter(s => s.tipo === 'fundo' || s.tipo === 'tesouro'));
+      if (marcado < 0 && sugestoes.length) marcado = 0;
+      pintarSugestoes();
+      $('nAviso').textContent = r.avisos.length
+        ? 'busca de ticker indisponível agora (' + r.avisos.join(', ') + ') — fundos e Tesouro seguem funcionando' : '';
+    });
+    try { await Promise.all([local, remoto]); }
+    catch (e) { if (e.name !== 'AbortError') $('nAviso').textContent = e.message; }
+  }, 140);
 });
 $('nBusca').addEventListener('keydown', e => {
   if (!sugestoes.length) return;
@@ -861,7 +877,11 @@ async function tudo() {
   } catch (e) { if (e.message !== 'login') console.error(e); }
 }
 tudo();
-setInterval(() => { carregarCarteira(true).catch(()=>{}); operacao().catch(()=>{}); }, 60000);
+setInterval(() => {
+  if (document.hidden) return;  // aba escondida não precisa cutucar o Yahoo nem o servidor
+  carregarCarteira(true).catch(()=>{});
+  operacao().catch(()=>{});
+}, 60000);
 </script>
 </body>
 </html>

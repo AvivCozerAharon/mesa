@@ -33,6 +33,13 @@ def get_fake(url, **kw):
     return Resposta(YAHOO)
 
 
+@pytest.fixture(autouse=True)
+def sem_cache():
+    busca._cache.clear()
+    yield
+    busca._cache.clear()
+
+
 @pytest.fixture
 def consulta(tmp_path):
     gravar_parquet(str(tmp_path), "fundos_cadastro", date(2026, 9, 22), pd.DataFrame([
@@ -58,6 +65,18 @@ def test_tickers_classifica_mercado_e_tipo():
     assert por_id["VOO"]["tipo"] == "etf_us" and por_id["PBR"]["tipo"] == "acao_us" and por_id["PBR"]["onde"] == "NYSE"
     assert "PJX" not in por_id and "^BVSP" not in por_id  # bolsa nao coberta e indice ficam de fora
     assert busca.tickers("p", get=get_fake) == []
+
+
+def test_tickers_reaproveita_a_busca_recente():
+    chamadas = []
+
+    def get(url, **kw):
+        chamadas.append(kw["params"]["q"])
+        return Resposta(YAHOO)
+
+    busca.tickers("petrobras", get=get)
+    busca.tickers("PETROBRAS", get=get)  # mesma consulta, caixa diferente
+    assert chamadas == ["petrobras"]
 
 
 def test_fundos_por_nome_e_cnpj(consulta):

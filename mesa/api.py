@@ -57,10 +57,22 @@ def criar_app(cfg: Config, db: Db | None = None, consulta: Consulta | None = Non
     consulta = consulta or Consulta(cfg.dados_dir)
     carteira = Carteira(db)
     app.state.cfg, app.state.db, app.state.consulta, app.state.carteira = cfg, db, consulta, carteira
+    try:
+        consulta.duck()  # monta as views agora: senão a primeira busca do dia paga sozinha os ~120 ms
+    except Exception as e:  # noqa: BLE001 - sem dados ainda nao e motivo para nao subir
+        log.warning("views do DuckDB nao montaram no start: %s", e)
     app.state.cliente_ia = None  # injetavel nos testes
     sessoes: set[str] = set()
     trava_job = threading.Lock()
     cache_cotacao = {"em": None, "dados": {}}
+
+    @app.middleware("http")
+    async def sem_cache(request: Request, chamar):
+        """Sem isto o navegador reaproveita /carteira e /posicoes por heurística e mostra a carteira
+        de antes da última alteração."""
+        resposta = await chamar(request)
+        resposta.headers["Cache-Control"] = "no-store"
+        return resposta
 
     def autenticado(request: Request):
         if not cfg.senha:
@@ -222,13 +234,21 @@ def criar_app(cfg: Config, db: Db | None = None, consulta: Consulta | None = Non
         p = carteira.obter(pid)
         if p is None:
             raise HTTPException(status_code=404, detail="posição não encontrada")
+        # iterrows em 1.250 pregoes custava ~60 ms do /ativo; montar por coluna resolve.
+        def _serie_json(df, colunas: dict[str, str]) -> list[dict]:
+            if df.empty:
+                return []
+            saida = pd.DataFrame({"data": pd.to_datetime(df["data"]).dt.strftime("%Y-%m-%d")})
+            for destino, origem in colunas.items():
+                saida[destino] = pd.to_numeric(df[origem], errors="coerce")
+            return saida.where(pd.notna(saida), None).to_dict("records")
+
         if p.tipo == "fundo":
-            df = consulta.cotas([p.identificador])
-            serie = [] if df.empty else [{"data": _d(r["data"]), "valor": float(r["cota"]), "pl": float(r["pl"])} for _, r in df.iterrows()]
+            serie = _serie_json(consulta.cotas([p.identificador]), {"valor": "cota", "pl": "pl"})
         elif p.mercado in ("B3", "US"):
-            df = consulta.precos([p.identificador])
-            serie = [] if df.empty else [{"data": _d(r["data"]), "abertura": r["abertura"], "maxima": r["maxima"], "minima": r["minima"],
-                                          "fechamento": r["fechamento"], "ajustado": r["ajustado"], "volume": r["volume"]} for _, r in df.iterrows()]
+            serie = _serie_json(consulta.precos([p.identificador]),
+                                {"abertura": "abertura", "maxima": "maxima", "minima": "minima",
+                                 "fechamento": "fechamento", "ajustado": "ajustado", "volume": "volume"})
         else:
             serie = []
         return {**p.para_dict(), "tese": carteira.tese(pid), "historico_teses": carteira.historico_teses(pid),
@@ -236,8 +256,8 @@ def criar_app(cfg: Config, db: Db | None = None, consulta: Consulta | None = Non
                 "metricas": db.metricas_recentes().get(pid), "serie": serie}
 
     @app.get("/buscar", dependencies=[Depends(autenticado)])
-    def buscar(q: str):
-        return bsc.buscar(consulta, q)
+    def buscar(q: str, fontes: str = "todas"):
+        return bsc.buscar(consulta, q, fontes)
 
     @app.get("/cotacao", dependencies=[Depends(autenticado)])
     def cotacao(tipo: str, identificador: str, data: date | None = None):
@@ -260,12 +280,20 @@ def criar_app(cfg: Config, db: Db | None = None, consulta: Consulta | None = Non
                          if (s.index <= s.index[-1] - pd.Timedelta(days=30)).any() else None}
         curvas = {}
         for pais in ("BR", "US"):
-            df = consulta._df("SELECT data, vencimento, titulo, taxa FROM curvas WHERE pais = ? ORDER BY data", [pais])
+            # Só as duas datas usadas: a curva inteira são dezenas de milhares de linhas por país.
+            datas = consulta._df("""SELECT max(data) AS ultima,
+                                           max(CASE WHEN data <= (SELECT max(data) FROM curvas WHERE pais = ?) - INTERVAL 30 DAY
+                                                    THEN data END) AS ha_um_mes
+                                    FROM curvas WHERE pais = ?""", [pais, pais])
+            if datas.empty or pd.isna(datas["ultima"].iloc[0]):
+                continue
+            ultima = pd.Timestamp(datas["ultima"].iloc[0])
+            data_1m = None if pd.isna(datas["ha_um_mes"].iloc[0]) else pd.Timestamp(datas["ha_um_mes"].iloc[0])
+            alvo = [d.date() for d in (ultima, data_1m) if d is not None]
+            marcas = ", ".join("?" for _ in alvo)
+            df = consulta._df(f"SELECT data, vencimento, titulo, taxa FROM curvas WHERE pais = ? AND data IN ({marcas})", [pais, *alvo])
             if df.empty:
                 continue
-            ultima = pd.Timestamp(df["data"].max())
-            um_mes = df[pd.to_datetime(df["data"]) <= ultima - pd.Timedelta(days=30)]
-            data_1m = pd.Timestamp(um_mes["data"].max()) if not um_mes.empty else None
             hoje_c = df[pd.to_datetime(df["data"]) == ultima]
             antes = df[pd.to_datetime(df["data"]) == data_1m] if data_1m is not None else pd.DataFrame()
             curvas[pais] = {"data": ultima.date().isoformat(), "data_1m": data_1m.date().isoformat() if data_1m is not None else None,

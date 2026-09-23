@@ -8,6 +8,7 @@ coleta mais recente, então um preço corrigido pela fonte substitui o anterior 
 import json
 import os
 import sqlite3
+import threading
 from datetime import date, datetime, timezone
 from pathlib import Path
 
@@ -52,12 +53,44 @@ def gravar_parquet(dados_dir: str, tabela: str, data_coleta: date, df: pd.DataFr
 
 
 class Consulta:
-    """Consultas analíticas sobre os Parquet (DuckDB em memória, views recriadas a cada conexão)."""
+    """Consultas analíticas sobre os Parquet (DuckDB em memória, uma conexão reaproveitada).
+
+    Criar as views custa a leitura do rodapé de cada Parquet (~120 ms com a base cheia), e antes isso
+    acontecia em toda consulta: a busca do autocomplete pagava três vezes. Agora a conexão fica viva e
+    só é refeita quando os arquivos mudam — o job grava Parquet novo, a assinatura muda, as views voltam.
+    """
 
     def __init__(self, dados_dir: str = "dados"):
         self.dados_dir = Path(dados_dir)
+        self._con: duckdb.DuckDBPyConnection | None = None
+        self._assinatura: tuple | None = None
+        self._colunas: dict[str, set[str]] = {}
+        self._trava = threading.Lock()
+
+    def _assinar(self) -> tuple:
+        """(quantos arquivos, mtime mais novo) por fonte: barato e pega gravação, troca e remoção."""
+        marcas = []
+        for fonte in VIEWS:
+            arquivos = sorted((self.dados_dir / fonte).glob("*.parquet")) if (self.dados_dir / fonte).exists() else []
+            marcas.append((fonte, len(arquivos), max((a.stat().st_mtime_ns for a in arquivos), default=0)))
+        return tuple(marcas)
 
     def duck(self) -> duckdb.DuckDBPyConnection:
+        """A conexão viva. Quem chama de outra thread deve usar `_df`/`colunas`, que travam."""
+        assinatura = self._assinar()
+        if self._con is not None and assinatura == self._assinatura:
+            return self._con
+        if self._con is not None:
+            self._con.close()
+        self._con, self._assinatura, self._colunas = self._montar(), assinatura, {}
+        return self._con
+
+    def fechar(self) -> None:
+        if self._con is not None:
+            self._con.close()
+            self._con, self._assinatura = None, None
+
+    def _montar(self) -> duckdb.DuckDBPyConnection:
         con = duckdb.connect()
         for fonte, (view, chave) in VIEWS.items():
             pasta = self.dados_dir / fonte
@@ -78,25 +111,23 @@ class Consulta:
         return con
 
     def colunas(self, view: str) -> set[str]:
-        con = self.duck()
-        try:
+        with self._trava:
+            con = self.duck()
+            if view in self._colunas:
+                return self._colunas[view]
             existentes = {r[0] for r in con.execute("SELECT view_name FROM duckdb_views() WHERE NOT internal").fetchall()}
-            if view not in existentes:
-                return set()
-            return {r[0] for r in con.execute(f"DESCRIBE SELECT * FROM {view}").fetchall()}
-        finally:
-            con.close()
+            cols = set() if view not in existentes else {r[0] for r in con.execute(f"DESCRIBE SELECT * FROM {view}").fetchall()}
+            self._colunas[view] = cols
+            return cols
 
     def _df(self, sql: str, params: list) -> pd.DataFrame:
-        con = self.duck()
-        try:
+        with self._trava:
+            con = self.duck()
             existentes = {r[0] for r in con.execute("SELECT view_name FROM duckdb_views() WHERE NOT internal").fetchall()}
             for view, _ in VIEWS.values():
                 if view not in existentes and f" {view} " in f" {sql} ".replace("\n", " "):
                     return pd.DataFrame()
             return con.execute(sql, params).df()
-        finally:
-            con.close()
 
     def precos(self, ativos: list[str], inicio: date | None = None, fim: date | None = None) -> pd.DataFrame:
         if not ativos:

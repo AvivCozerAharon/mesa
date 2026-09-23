@@ -90,3 +90,24 @@ def test_busca_mostra_o_identificador(tmp_path):
     assert por_id[f"{CNPJ}:{SUB_A}"]["codigo"] == f"00.888.897/0001-31 · {SUB_A}"
     assert por_id[f"{CNPJ}:{SUB_A}"]["detalhe"].startswith("subclasse")
     assert [x["identificador"] for x in busca.fundos(Consulta(str(tmp_path)), "00.888.897/0001-31")] == [CNPJ, f"{CNPJ}:{SUB_A}"]
+
+
+def test_precos_atuais_com_parquet_anterior_as_subclasses(tmp_path):
+    """Base gravada antes da coluna `subclasse` continua valorizando a carteira."""
+    from mesa.armazenamento import Db
+    from mesa.carteira import Carteira, Posicao
+    from mesa import job
+    gravar_parquet(str(tmp_path), "cotas_fundos", date(2026, 9, 22), pd.DataFrame([
+        {"cnpj": "22215116000180", "data": date(2026, 9, 15), "cota": 3.10, "pl": 9e8, "captacao": 0.0, "resgate": 0.0, "cotistas": 9},
+        {"cnpj": "22215116000180", "data": date(2026, 9, 16), "cota": 3.12, "pl": 9e8, "captacao": 0.0, "resgate": 0.0, "cotistas": 9},
+    ]))
+    gravar_parquet(str(tmp_path), "precos", date(2026, 9, 22), pd.DataFrame([
+        {"ativo": "PETR4", "data": date(2026, 9, 17), "abertura": 1.0, "maxima": 1.0, "minima": 1.0, "fechamento": 47.0, "ajustado": 47.0, "volume": 1.0},
+        {"ativo": "PETR4", "data": date(2026, 9, 18), "abertura": 1.0, "maxima": 1.0, "minima": 1.0, "fechamento": 48.0, "ajustado": 48.0, "volume": 1.0},
+    ]), fonte="yahoo")
+    c = Carteira(Db(str(tmp_path / "m.db")))
+    c.criar(Posicao("", "fundo", "22215116000180", 100, 3.0, date(2026, 1, 2)))
+    c.criar(Posicao("", "acao", "PETR4", 100, 32.1, date(2025, 2, 14)))
+    precos = job.precos_atuais(Consulta(str(tmp_path)), c)
+    assert precos["22215116000180"] == (pytest.approx(3.12), date(2026, 9, 16))
+    assert precos["PETR4"] == (pytest.approx(48.0), date(2026, 9, 18))

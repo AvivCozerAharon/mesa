@@ -92,32 +92,39 @@ def cambio_atual(consulta: Consulta) -> tuple[float | None, date | None]:
 
 
 def precos_atuais(consulta: Consulta, carteira: Carteira) -> dict[str, tuple[float, date]]:
+    """Só o último preço de cada posição. A última linha sai no SQL: trazer cinco anos de preço e
+    58 mil linhas de curva para pegar a ponta custava 85 ms em toda abertura de tela."""
     out = {}
     pos = carteira.listar()
     tick = [p.identificador for p in pos if p.mercado in ("B3", "US")]
     if tick:
-        df = consulta.precos(tick)
-        if not df.empty:
-            for ident, sub in df.groupby("ativo"):
-                ult = sub.sort_values("data").iloc[-1]
-                out[ident] = (float(ult["fechamento"]), pd.Timestamp(ult["data"]).date())
+        marcas = ", ".join("?" for _ in tick)
+        df = consulta._df(f"""SELECT ativo, data, fechamento FROM precos WHERE ativo IN ({marcas})
+                              QUALIFY row_number() OVER (PARTITION BY ativo ORDER BY data DESC) = 1""", tick)
+        for _, r in df.iterrows():
+            out[r["ativo"]] = (float(r["fechamento"]), pd.Timestamp(r["data"]).date())
     cnpjs = carteira.cnpjs()
     if cnpjs:
-        df = consulta.cotas(cnpjs)
-        if not df.empty:
-            for ident, linhas in df.groupby("identificador"):
-                ult = linhas.sort_values("data").iloc[-1]
-                out[ident] = (float(ult["cota"]), pd.Timestamp(ult["data"]).date())
+        pares = [partes_fundo(i) for i in cnpjs]
+        so_cnpjs = sorted({c for c, _ in pares})
+        marcas = ", ".join("?" for _ in so_cnpjs)
+        # Parquet gravado antes das subclasses não tem a coluna: citá-la direto derruba a consulta.
+        sub = "coalesce(subclasse, '')" if "subclasse" in consulta.colunas("cotas_fundos") else "''"
+        df = consulta._df(f"""SELECT cnpj, {sub} AS subclasse, data, cota FROM cotas_fundos
+                              WHERE cnpj IN ({marcas})
+                              QUALIFY row_number() OVER (PARTITION BY cnpj, {sub} ORDER BY data DESC) = 1""", so_cnpjs)
+        for _, r in df.iterrows():
+            ident = f"{r['cnpj']}:{r['subclasse']}" if r["subclasse"] else r["cnpj"]
+            if ident in set(cnpjs):
+                out[ident] = (float(r["cota"]), pd.Timestamp(r["data"]).date())
     tesouro = [p.identificador for p in pos if p.tipo == "tesouro"]
     if tesouro:
-        curvas = consulta._df("SELECT titulo, vencimento, data, pu FROM curvas WHERE pais = 'BR' AND pu IS NOT NULL ORDER BY data", [])
-        if not curvas.empty:
-            curvas["nome"] = curvas["titulo"] + " " + pd.to_datetime(curvas["vencimento"]).dt.year.astype(str)
-            for nome in tesouro:
-                sub = curvas[curvas["nome"] == nome]
-                if not sub.empty:
-                    ult = sub.iloc[-1]
-                    out[nome] = (float(ult["pu"]), pd.Timestamp(ult["data"]).date())
+        marcas = ", ".join("?" for _ in tesouro)
+        df = consulta._df(f"""SELECT titulo || ' ' || strftime(vencimento, '%Y') AS nome, data, pu FROM curvas
+                              WHERE pais = 'BR' AND pu IS NOT NULL AND nome IN ({marcas})
+                              QUALIFY row_number() OVER (PARTITION BY nome ORDER BY data DESC) = 1""", tesouro)
+        for _, r in df.iterrows():
+            out[r["nome"]] = (float(r["pu"]), pd.Timestamp(r["data"]).date())
     return out
 
 

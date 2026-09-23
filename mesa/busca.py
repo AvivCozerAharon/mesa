@@ -10,7 +10,9 @@ Ticker depende do Yahoo; sem rede a lista fica só com o que é local e a UI diz
 """
 import os
 import re
+import time
 import zipfile
+from collections import OrderedDict
 from datetime import date, timedelta
 
 import pandas as pd
@@ -57,19 +59,41 @@ def parece_ticker(termo: str) -> bool:
     return not any(p in t.upper() for p in ("TESOURO", "IPCA+", "SELIC", "PREFIXADO", "RENDA+"))
 
 
-def tickers(termo: str, limite: int = 6, get=None) -> list[dict]:
-    if len(termo.strip()) < 2 or not parece_ticker(termo):
-        return []
-    if get is None:
+_sessao = None
+_cache: "OrderedDict[str, tuple[float, list[dict]]]" = OrderedDict()
+CACHE_SEGUNDOS = 180
+CACHE_MAX = 64
+
+
+def _get_padrao(url, **kw):
+    """Sessão reaproveitada: sem ela cada tecla paga um handshake TLS novo com o Yahoo."""
+    global _sessao
+    if _sessao is None:
         import requests
-        get = lambda url, **kw: requests.get(url, timeout=5, **kw)  # noqa: E731
-    r = get(URL_BUSCA, params={"q": termo, "quotesCount": 12, "newsCount": 0, "listsCount": 0}, headers=CABECALHO)
+        _sessao = requests.Session()
+        _sessao.headers.update(CABECALHO)
+    return _sessao.get(url, timeout=5, **kw)
+
+
+def tickers(termo: str, limite: int = 6, get=None) -> list[dict]:
+    termo = termo.strip()
+    if len(termo) < 2 or not parece_ticker(termo):
+        return []
+    chave = termo.upper()
+    agora = time.monotonic()
+    guardado = _cache.get(chave)
+    if guardado and agora - guardado[0] < CACHE_SEGUNDOS:
+        return guardado[1][:limite]
+    r = (get or _get_padrao)(URL_BUSCA, params={"q": termo, "quotesCount": 12, "newsCount": 0, "listsCount": 0}, headers=CABECALHO)
     r.raise_for_status()
     out = []
     for q in r.json().get("quotes", []):
         item = _de_yahoo(q)
         if item and not any(x["identificador"] == item["identificador"] for x in out):
             out.append(item)
+    _cache[chave] = (agora, out)
+    while len(_cache) > CACHE_MAX:
+        _cache.popitem(last=False)
     return out[:limite]
 
 
@@ -125,11 +149,17 @@ def tesouro(consulta: Consulta, termo: str, limite: int = 6) -> list[dict]:
             for _, r in alvo.head(limite).iterrows()]
 
 
-def buscar(consulta: Consulta, termo: str, get=None) -> dict:
-    """Junta as três fontes. Uma fonte que falha não derruba a busca — a UI mostra o aviso."""
+def buscar(consulta: Consulta, termo: str, fontes: str = "todas", get=None) -> dict:
+    """Uma fonte que falha não derruba a busca — a UI mostra o aviso.
+
+    `fontes` existe porque o Yahoo leva ~400 ms e o que está no disco leva ~50 ms: a tela pede as duas
+    coisas em paralelo, pinta o que é local na hora e encaixa os tickers quando chegam.
+    """
+    locais = [("tesouro", lambda: tesouro(consulta, termo)), ("fundos", lambda: fundos(consulta, termo))]
+    remotas = [("tickers", lambda: tickers(termo, get=get))]
+    escolhidas = locais if fontes == "locais" else remotas if fontes == "tickers" else locais + remotas
     itens, avisos = [], []
-    for nome, fn in (("tesouro", lambda: tesouro(consulta, termo)), ("fundos", lambda: fundos(consulta, termo)),
-                     ("tickers", lambda: tickers(termo, get=get))):
+    for nome, fn in escolhidas:
         try:
             itens += fn()
         except Exception as e:  # noqa: BLE001 - Yahoo fora do ar nao pode travar a busca de fundo
