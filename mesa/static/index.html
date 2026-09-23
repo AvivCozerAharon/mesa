@@ -150,7 +150,7 @@
   #plantao .cab .agora{margin-left:auto;font-variant-numeric:tabular-nums;color:#7E8C90}
   #plantao .corpo{display:grid;grid-template-columns:minmax(0,1fr) 420px;min-height:0}
   #plantao .noticias{overflow-y:auto;padding:4px 0}
-  #plantao .noticias li{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:12px;padding:6px 18px;
+  #plantao .noticias li{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:4px 12px;padding:7px 18px;
                         border-bottom:1px solid #1A2325;align-items:baseline}
   #plantao .noticias li:hover{background:#151D1F}
   #plantao .noticias .hora{color:#6D7B7F;font-variant-numeric:tabular-nums;font-size:13px}
@@ -168,6 +168,9 @@
   #plantao .cartao .d{font-size:11px;color:#5E6C70;font-variant-numeric:tabular-nums}
   #plantao .sobe{color:#6FB98D} #plantao .desce{color:#E08272}
   #plantao .vazio2{color:#5E6C70;padding:20px 18px;font-family:var(--serif)}
+  #pFiltros button{background:none;border:1px solid #2C3639;color:#7E8C90;padding:2px 9px;font-size:12px;margin-left:5px}
+  #pFiltros button[aria-pressed="true"]{background:#1F2A2D;border-color:#4A585C;color:#EDEFEA}
+  #plantao .noticias .ed{color:#5E6C70;font-size:11px}
   @media (max-width:900px){ #plantao .corpo{grid-template-columns:1fr;grid-template-rows:1fr auto} }
 
   .veu{position:fixed;inset:0;background:rgba(10,16,18,.55);display:none;align-items:flex-start;justify-content:center;z-index:9;padding:7vh 16px}
@@ -266,6 +269,7 @@
   <div class="cab">
     <h2>Plantão</h2>
     <span style="color:#6D7B7F;font-size:13px" id="pResumo">carregando…</span>
+    <span id="pFiltros" role="group" aria-label="filtrar manchetes"></span>
     <span class="agora" id="pAgora"></span>
     <button id="pFechar" style="background:#1B2427;border-color:#2C3639;color:#D8DEDC">Fechar <kbd style="border-color:#3A4548;color:#7E8C90">esc</kbd></button>
   </div>
@@ -809,7 +813,7 @@ async function plantao() {
   // O casamento por posição é o do servidor (ticker em maiúsculas, nome inteiro, termos do mandato):
   // repetir a regra aqui só criaria uma segunda verdade — e foi assim que "VOO" virou notícia de avião.
   const [gerais, m, ...porPosicao] = await Promise.all([
-    api('/noticias?dias=2'),
+    api('/noticias?dias=2&limite=120'),
     macroCache ? Promise.resolve(macroCache) : api('/macro?ao_vivo=1'),
     ...pos.map(p => api('/noticias?posicao=' + p.id + '&dias=2').then(r => r.map(n => ({...n, ativo: p.ativo}))).catch(() => [])),
   ]);
@@ -820,14 +824,8 @@ async function plantao() {
     if (!porUrl.has(chave)) porUrl.set(chave, n);
     else if (n.ativo && !porUrl.get(chave).ativo) porUrl.get(chave).ativo = n.ativo;
   }
-  const ns = [...porUrl.values()].sort((a, b) => String(b.publicada_em || '').localeCompare(String(a.publicada_em || '')));
-  const daCarteira = ns.filter(n => n.ativo).length;
-  $('pNoticias').innerHTML = ns.length ? ns.map(n =>
-    `<li><span class="hora">${horaDe(n.publicada_em)}</span>
-      <a href="${esc(n.url)}" target="_blank" rel="noopener">${esc(n.titulo)}</a>
-      <span class="${n.ativo ? 'dela' : 'fonte'}">${esc(n.ativo || n.fonte || '')}</span></li>`).join('')
-    : '<li class="vazio2">Sem notícias coletadas nas últimas 48 horas. O job da manhã busca por você às 7h.</li>';
-  $('pResumo').textContent = `${ns.length} manchetes nas últimas 48 h · ${daCarteira} tocam a sua carteira`;
+  manchetes = [...porUrl.values()].sort((a, b) => String(b.publicada_em || '').localeCompare(String(a.publicada_em || '')));
+  pintarManchetes();
 
   const b = m.benchmarks || {}, rot = {IBOV:'Ibovespa', SP500:'S&P 500', NASDAQ:'Nasdaq', IFIX:'IFIX', USDBRL:'dólar'};
   const blocos = [];
@@ -854,6 +852,30 @@ async function plantao() {
   $('pPaineis').innerHTML = blocos.join('');
   $('pAgora').textContent = new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) + ' em São Paulo';
 }
+let manchetes = [], filtro = 'tudo';
+const FILTROS = ['tudo', 'carteira', 'mercado', 'política', 'mundo'];
+function pintarManchetes() {
+  const lista = manchetes.filter(n => filtro === 'tudo' || (filtro === 'carteira' ? n.ativo : n.editoria === filtro));
+  $('pNoticias').innerHTML = lista.length ? lista.map(n =>
+    `<li><span class="hora">${horaDe(n.publicada_em)}</span>
+      <div><a href="${esc(n.url)}" target="_blank" rel="noopener">${esc(n.titulo)}</a>
+        <div class="ed">${esc(n.fonte || '')}${n.editoria && n.editoria !== 'carteira' ? ' · ' + esc(n.editoria) : ''}</div></div>
+      <span class="${n.ativo ? 'dela' : 'fonte'}">${esc(n.ativo || '')}</span></li>`).join('')
+    : `<li class="vazio2">${manchetes.length ? 'Nada em ' + filtro + ' nas últimas 48 horas.'
+        : 'Sem notícias coletadas nas últimas 48 horas. O job da manhã busca por você às 7h.'}</li>`;
+  const daCarteira = manchetes.filter(n => n.ativo).length;
+  $('pResumo').textContent = `${manchetes.length} manchetes em 48 h · ${daCarteira} tocam a sua carteira`;
+  $('pFiltros').innerHTML = FILTROS.map(f => {
+    const n = f === 'tudo' ? manchetes.length
+      : f === 'carteira' ? daCarteira : manchetes.filter(x => x.editoria === f).length;
+    return `<button data-filtro="${f}" aria-pressed="${f === filtro}">${f} ${n}</button>`;
+  }).join('');
+}
+$('pFiltros').addEventListener('click', e => {
+  const b = e.target.closest('button[data-filtro]');
+  if (b) { filtro = b.dataset.filtro; pintarManchetes(); }
+});
+
 function abrirPlantao() {
   $('plantao').classList.add('aberto'); $('plantao').setAttribute('aria-hidden', 'false');
   plantao().catch(e => { if (e.message !== 'login') console.error(e); });

@@ -8,6 +8,7 @@ título, fonte, data e URL — nada de scraping do corpo.
 """
 import re
 import unicodedata
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
 from urllib.parse import parse_qsl, quote, urlencode, urlsplit, urlunsplit
@@ -16,9 +17,28 @@ from mesa.armazenamento import Db, agora_utc
 from mesa.carteira import Posicao
 
 GOOGLE_NEWS = "https://news.google.com/rss/search?q={q}&hl=pt-BR&gl=BR&ceid=BR:pt-419"
-FEEDS_GERAIS = {"InfoMoney": "https://www.infomoney.com.br/feed/",
-                "Valor Investe": "https://valorinveste.globo.com/rss/valorinveste/",
-                "Reuters Brasil": "https://news.google.com/rss/search?q=site:reuters.com+mercado+brasil&hl=pt-BR&gl=BR&ceid=BR:pt-419"}
+# nome -> (url do RSS, editoria). A editoria serve para filtrar no plantão: com 17 fontes, o dia
+# inteiro numa lista só vira ruído. "mercado" é o que alimenta as teses; o resto é contexto.
+FEEDS_GERAIS = {
+    "Brazil Journal": ("https://braziljournal.com/feed/", "mercado"),
+    "NeoFeed": ("https://neofeed.com.br/feed/", "mercado"),
+    "InfoMoney": ("https://www.infomoney.com.br/feed/", "mercado"),
+    "Money Times": ("https://www.moneytimes.com.br/feed/", "mercado"),
+    "Seu Dinheiro": ("https://www.seudinheiro.com/feed/", "mercado"),
+    "Exame": ("https://exame.com/feed/", "mercado"),
+    "Valor Investe": ("https://valorinveste.globo.com/rss/valorinveste/", "mercado"),
+    "Estadão Economia": ("https://www.estadao.com.br/arc/outboundfeeds/feeds/rss/sections/economia/?outputType=xml", "mercado"),
+    "Folha Mercado": ("https://feeds.folha.uol.com.br/mercado/rss091.xml", "mercado"),
+    "G1 Economia": ("https://g1.globo.com/rss/g1/economia/", "mercado"),
+    "Poder360": ("https://www.poder360.com.br/feed/", "política"),
+    "Folha Poder": ("https://feeds.folha.uol.com.br/poder/rss091.xml", "política"),
+    "G1 Política": ("https://g1.globo.com/rss/g1/politica/", "política"),
+    "Agência Brasil": ("https://agenciabrasil.ebc.com.br/rss/ultimasnoticias/feed.xml", "política"),
+    "BBC Brasil": ("https://feeds.bbci.co.uk/portuguese/rss.xml", "mundo"),
+    "CNN Brasil": ("https://www.cnnbrasil.com.br/feed/", "mundo"),
+    "Reuters Brasil": ("https://news.google.com/rss/search?q=site:reuters.com+mercado+brasil&hl=pt-BR&gl=BR&ceid=BR:pt-419", "mundo"),
+}
+EDITORIAS = ("carteira", "mercado", "política", "mundo")
 UA = {"User-Agent": "Mozilla/5.0 (mesa)"}
 # frases que indicam que o nome apareceu em outro sentido (só derrubam casamento por nome)
 EXCLUSOES = {"VALE3": ["vale a pena", "vale mais", "vale do", "vale-tudo", "vale tudo", "não vale", "nao vale", "vale ouro"],
@@ -84,26 +104,38 @@ def _parse(conteudo, termo: str, fonte_padrao: str | None = None) -> list[dict]:
     return itens
 
 
-def coletar_rss(termos_busca: list[str], fetch=None, max_por_termo: int = 25, feeds_gerais: dict | None = FEEDS_GERAIS) -> list[dict]:
-    """`fetch(url) -> bytes`; injetável nos testes. Falha num feed não derruba os outros."""
+def coletar_rss(termos_busca: list[str], fetch=None, max_por_termo: int = 25, feeds_gerais: dict | None = FEEDS_GERAIS,
+                paralelas: int = 8) -> list[dict]:
+    """`fetch(url) -> bytes`; injetável nos testes. Falha num feed não derruba os outros.
+
+    Trinta buscas e feeds em série levavam ~40 s do job; em paralelo o tempo vira o do feed mais lento.
+    """
     if fetch is None:
         import requests
 
         def fetch(url):
             return requests.get(url, headers=UA, timeout=30).content
-    itens = []
+
+    tarefas = []  # (url, termo, fonte_padrao, editoria)
     for termo in termos_busca:
         q = quote(f'"{termo}"' if " " in termo else termo)
+        tarefas.append((GOOGLE_NEWS.format(q=q), termo, None, "carteira"))
+    for nome, destino in (feeds_gerais or {}).items():
+        url, editoria = destino if isinstance(destino, tuple) else (destino, "mercado")
+        tarefas.append((url, "", nome, editoria))
+
+    def buscar(tarefa):
+        url, termo, fonte_padrao, editoria = tarefa
         try:
-            itens += _parse(fetch(GOOGLE_NEWS.format(q=q)), termo)[:max_por_termo]
-        except Exception:  # noqa: BLE001 - um termo fora nao impede os outros
-            continue
-    for nome, url in (feeds_gerais or {}).items():
-        try:
-            itens += _parse(fetch(url), "", fonte_padrao=nome)[:max_por_termo]
-        except Exception:  # noqa: BLE001
-            continue
-    return itens
+            itens = _parse(fetch(url), termo, fonte_padrao=fonte_padrao)[:max_por_termo]
+        except Exception:  # noqa: BLE001 - um feed fora nao impede os outros
+            return []
+        for it in itens:
+            it["editoria"] = editoria
+        return itens
+
+    with ThreadPoolExecutor(max_workers=max(1, paralelas)) as pool:
+        return [item for lista in pool.map(buscar, tarefas) for item in lista]
 
 
 def _tokens_relevantes(termo: str) -> list[str]:
@@ -147,8 +179,10 @@ def salvar(db: Db, itens: list[dict], posicoes: list[Posicao]) -> dict:
             r = con.execute("SELECT id FROM noticias WHERE titulo_norm = ? ORDER BY id DESC LIMIT 1", (tn,)).fetchone()
             nid = r["id"] if r else None
         else:
-            cur = con.execute("INSERT OR IGNORE INTO noticias (url, titulo, fonte, publicada_em, coletada_em, titulo_norm) VALUES (?,?,?,?,?,?)",
-                              (it["url"], it["titulo"], it.get("fonte"), it.get("publicada_em"), agora_utc().isoformat(), tn))
+            cur = con.execute("INSERT OR IGNORE INTO noticias (url, titulo, fonte, publicada_em, coletada_em, titulo_norm, editoria)"
+                              " VALUES (?,?,?,?,?,?,?)",
+                              (it["url"], it["titulo"], it.get("fonte"), it.get("publicada_em"), agora_utc().isoformat(), tn,
+                               it.get("editoria") or "mercado"))
             if cur.rowcount == 0:
                 r = con.execute("SELECT id FROM noticias WHERE url = ?", (it["url"],)).fetchone()
                 nid = r["id"] if r else None
@@ -174,9 +208,13 @@ def recentes(db: Db, identificador: str, dias: int = 7, limite: int = 12) -> lis
     return [dict(r) for r in rows]
 
 
-def gerais(db: Db, dias: int = 2, limite: int = 15) -> list[dict]:
+def gerais(db: Db, dias: int = 2, limite: int = 15, editoria: str | None = None) -> list[dict]:
     desde = (agora_utc() - timedelta(days=dias)).isoformat()
-    rows = db.con.execute("""SELECT id, titulo, fonte, publicada_em, url FROM noticias
-                             WHERE coalesce(publicada_em, coletada_em) >= ? ORDER BY coalesce(publicada_em, coletada_em) DESC LIMIT ?""",
-                          (desde, limite)).fetchall()
+    filtro, params = "", [desde]
+    if editoria:
+        filtro, params = " AND editoria = ?", [desde, editoria]
+    rows = db.con.execute(f"""SELECT id, titulo, fonte, publicada_em, url, coalesce(editoria, 'mercado') AS editoria FROM noticias
+                              WHERE coalesce(publicada_em, coletada_em) >= ?{filtro}
+                              ORDER BY coalesce(publicada_em, coletada_em) DESC LIMIT ?""",
+                          (*params, limite)).fetchall()
     return [dict(r) for r in rows]

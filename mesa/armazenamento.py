@@ -226,7 +226,7 @@ CREATE TABLE IF NOT EXISTS disparos (
   estado_hash TEXT NOT NULL, detalhe TEXT NOT NULL, visto INTEGER NOT NULL DEFAULT 0, UNIQUE(gatilho_id, estado_hash));
 CREATE TABLE IF NOT EXISTS noticias (
   id INTEGER PRIMARY KEY AUTOINCREMENT, url TEXT NOT NULL UNIQUE, titulo TEXT NOT NULL, fonte TEXT,
-  publicada_em TEXT, coletada_em TEXT NOT NULL, titulo_norm TEXT NOT NULL);
+  publicada_em TEXT, coletada_em TEXT NOT NULL, titulo_norm TEXT NOT NULL, editoria TEXT NOT NULL DEFAULT 'mercado');
 CREATE TABLE IF NOT EXISTS noticia_ativo (noticia_id INTEGER NOT NULL, ativo TEXT NOT NULL, metodo TEXT, score REAL,
   UNIQUE(noticia_id, ativo));
 CREATE TABLE IF NOT EXISTS briefings (
@@ -260,6 +260,8 @@ class Db:
             self._con.execute("ALTER TABLE posicoes ADD COLUMN busca TEXT NOT NULL DEFAULT ''")
         if "mandato" not in colunas:
             self._con.execute("ALTER TABLE posicoes ADD COLUMN mandato TEXT NOT NULL DEFAULT ''")
+        if "editoria" not in {r[1] for r in self._con.execute("PRAGMA table_info(noticias)").fetchall()}:
+            self._con.execute("ALTER TABLE noticias ADD COLUMN editoria TEXT NOT NULL DEFAULT 'mercado'")
         # Posicao existente vira a sua primeira compra, para que quantidade e preco medio passem a ser
         # derivados das compras sem que nenhuma carteira antiga perca o que ja estava lancado.
         self._con.execute("INSERT INTO compras (posicao_id, data, quantidade, preco, criada_em)"

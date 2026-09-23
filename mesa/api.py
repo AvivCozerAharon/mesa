@@ -322,9 +322,9 @@ def criar_app(cfg: Config, db: Db | None = None, consulta: Consulta | None = Non
         return ia.briefing_do_dia(db, date.fromisoformat(data) if data else None)
 
     @app.get("/noticias", dependencies=[Depends(autenticado)])
-    def noticias(posicao: int | None = None, dias: int = 7):
+    def noticias(posicao: int | None = None, dias: int = 7, editoria: str | None = None, limite: int = 40):
         if posicao is None:
-            return noti.gerais(db, dias=dias, limite=40)
+            return noti.gerais(db, dias=dias, limite=limite, editoria=editoria)
         p = carteira.obter(posicao)
         if p is None:
             raise HTTPException(status_code=404, detail="posição não encontrada")

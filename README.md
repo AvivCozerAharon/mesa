@@ -32,7 +32,7 @@ validador e não vai pra tela.
 | curva BR (Tesouro Direto) | Tesouro Transparente | diário |
 | curva EUA | Treasury.gov | diário |
 | fundamentos de ações (P/L, EV/EBITDA, margens, ROE, dív. líq./EBITDA, DY, payout, crescimento, DRE trimestral) | Yahoo Finance | diário; balanço do trimestre anterior |
-| notícias | Google News RSS por termo de busca de cada posição + feeds | contínuo |
+| notícias | Google News RSS por termo de cada posição + 17 feeds (Brazil Journal, NeoFeed, InfoMoney, Money Times, Seu Dinheiro, Exame, Valor, Estadão, Folha, G1, Poder360, Agência Brasil, BBC, CNN…), com editoria por fonte | contínuo |
 | IA | OpenAI (modelo por env), saída JSON validada | por briefing |
 
 ## Interface
@@ -65,7 +65,8 @@ diz de que dia veio o preço.
 ### Plantão
 
 Tela cheia (botão no topo ou `p`) para deixar num segundo monitor: as manchetes das últimas 48 horas em
-ordem, marcando as que casaram com alguma posição, e os preços que importam — índices e câmbio, a curva
+ordem, filtráveis por editoria (carteira, mercado, política, mundo) e marcando as que casaram com
+alguma posição, e os preços que importam — índices e câmbio, a curva
 de juros brasileira e a americana com a variação em pontos-base no mês, e as suas posições. Atualiza a
 cada dois minutos. É escuro mesmo no tema claro: ali se varre de longe, não se lê.
 

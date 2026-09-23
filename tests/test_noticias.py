@@ -60,3 +60,36 @@ def test_salvar_dedupe_e_recentes(tmp_path):
     assert [n["titulo"] for n in recentes(db, "VALE3")] == ["Vale anuncia recompra de ações"]
     assert recentes(db, "VALE3", dias=0) == []
     assert len(gerais(db, dias=3)) == 3
+
+
+def test_feeds_gerais_marcam_editoria_e_rodam_em_paralelo():
+    """Cada feed carrega a sua editoria; o filtro do plantão depende disso."""
+    from mesa import noticias as n
+    pedidos = []
+
+    def fetch(url):
+        pedidos.append(url)
+        if "quebra" in url:
+            raise TimeoutError("fora do ar")
+        return RSS
+
+    feeds = {"Brazil Journal": ("https://braziljournal.com/feed/", "mercado"),
+             "Poder360": ("https://poder360.com.br/feed/", "política"),
+             "Quebrado": ("https://quebra.example/feed/", "mercado")}
+    itens = n.coletar_rss(["PETR4"], fetch=fetch, feeds_gerais=feeds, paralelas=4)
+    assert len(pedidos) == 4  # 1 termo + 3 feeds
+    por_editoria = {}
+    for it in itens:
+        por_editoria.setdefault(it["editoria"], []).append(it)
+    assert set(por_editoria) == {"carteira", "mercado", "política"}
+    # item com <source> proprio mantem a fonte dele; os demais herdam o nome do feed
+    assert {i["fonte"] for i in por_editoria["política"]} == {"Investidor10", "Poder360"}
+
+
+def test_gerais_filtra_por_editoria(tmp_path):
+    from mesa import noticias as n
+    db = Db(str(tmp_path / "m.db"))
+    n.salvar(db, [{"url": "https://a/1", "titulo": "Copom mantém a Selic", "fonte": "Poder360", "publicada_em": None, "editoria": "política"},
+                  {"url": "https://a/2", "titulo": "Petrobras anuncia dividendos", "fonte": "Brazil Journal", "publicada_em": None, "editoria": "mercado"}], [])
+    assert [x["titulo"] for x in n.gerais(db, editoria="política")] == ["Copom mantém a Selic"]
+    assert len(n.gerais(db)) == 2 and n.gerais(db)[0]["editoria"] in ("política", "mercado")
