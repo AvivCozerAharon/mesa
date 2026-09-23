@@ -141,6 +141,10 @@ $//' .env` resolveu.
 
 ## Limites conhecidos
 
+- O Yahoo demora horas para fechar a barra diária (ela fica com `Close` vazio depois do pregão), e o
+  Parquet só guarda fechamento consolidado. Por isso a fita e o plantão pedem cotação (`?ao_vivo=1`,
+  cache de 60 s) e marcam com `•` o que é última negociação em vez de fechamento guardado.
+
 - Open Finance não entra: puxar dados por lá exige ser instituição autorizada pelo Banco Central e estar
   no diretório de participantes (ou pagar um agregador). A carteira entra por CSV ou pela tela.
 

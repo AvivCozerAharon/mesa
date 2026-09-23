@@ -19,7 +19,7 @@ from mesa.armazenamento import Consulta, Db
 from mesa.calendario import agora_brt
 from mesa.carteira import Carteira, Posicao, resumo, somar_compras, valorizar
 from mesa.config import Config
-from mesa.fontes.yahoo import cotacao_atual
+from mesa.fontes.yahoo import cotacao_atual, cotacao_benchmarks
 
 log = logging.getLogger("mesa.api")
 
@@ -65,6 +65,7 @@ def criar_app(cfg: Config, db: Db | None = None, consulta: Consulta | None = Non
     sessoes: set[str] = set()
     trava_job = threading.Lock()
     cache_cotacao = {"em": None, "dados": {}}
+    cache_bench = {"em": None, "dados": {}}
 
     @app.middleware("http")
     async def sem_cache(request: Request, chamar):
@@ -268,7 +269,7 @@ def criar_app(cfg: Config, db: Db | None = None, consulta: Consulta | None = Non
         return bsc.preco_em(consulta, tipo, identificador, data, dados_dir=cfg.dados_dir)
 
     @app.get("/macro", dependencies=[Depends(autenticado)])
-    def macro():
+    def macro(ao_vivo: bool = False):
         bench = job.benchmarks(consulta)
         out = {}
         for nome, s in bench.items():
@@ -278,6 +279,17 @@ def criar_app(cfg: Config, db: Db | None = None, consulta: Consulta | None = Non
                          "var_1d": float((s.iloc[-1] / s.iloc[-2] - 1) * 100) if len(s) > 1 else None,
                          "var_1m": float((s.iloc[-1] / s[s.index <= s.index[-1] - pd.Timedelta(days=30)].iloc[-1] - 1) * 100)
                          if (s.index <= s.index[-1] - pd.Timedelta(days=30)).any() else None}
+        if ao_vivo:
+            agora = agora_brt()
+            if cache_bench["em"] is None or (agora - cache_bench["em"]).total_seconds() > 60:
+                cache_bench["dados"], cache_bench["em"] = cotacao_benchmarks(), agora
+            for nome, q in cache_bench["dados"].items():
+                if nome not in out or not q.get("preco"):
+                    continue
+                anterior = q.get("fechamento_anterior")
+                out[nome] = {**out[nome], "ultimo": q["preco"], "ao_vivo": True, "hora": agora.strftime("%H:%M"),
+                             "fechamento_anterior": anterior, "data_fechamento": out[nome]["data"],
+                             "var_1d": (q["preco"] / anterior - 1) * 100 if anterior else out[nome]["var_1d"]}
         curvas = {}
         for pais in ("BR", "US"):
             # Só as duas datas usadas: a curva inteira são dezenas de milhares de linhas por país.

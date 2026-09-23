@@ -79,18 +79,34 @@ class Yahoo:
         return df, Coleta(self.nome, True, detalhe={"sem_dados": [a for a, _ in faltando]})
 
 
-def cotacao_atual(tickers: list[tuple[str, str]]) -> dict[str, dict]:
-    """Última cotação (atrasada ~15 min na B3) para a UI. Nunca lança: ativo sem dado fica de fora."""
-    import yfinance as yf
+def cotacoes(simbolos: dict[str, str], ticker_factory=None) -> dict[str, dict]:
+    """`simbolos`: nome → símbolo do Yahoo. Nunca lança: ativo sem dado fica de fora.
+
+    A cotação é mais nova que a série diária: o Yahoo demora para fechar a barra do dia (ela fica com
+    `Close` vazio por horas depois do pregão) e o histórico só guarda fechamento consolidado. Por isso
+    a tela pede cotação para mostrar "agora", e o Parquet segue só com o que já fechou.
+    """
+    if ticker_factory is None:
+        import yfinance as yf
+        ticker_factory = yf.Ticker
     out = {}
-    for ativo, mercado in tickers:
+    for nome, simbolo in simbolos.items():
         try:
-            fi = yf.Ticker(simbolo_yahoo(ativo, mercado)).fast_info
-            out[ativo] = {"preco": float(fi["last_price"]), "fechamento_anterior": float(fi["previous_close"]),
-                          "moeda": fi.get("currency")}
-        except Exception:  # noqa: BLE001
+            fi = ticker_factory(simbolo).fast_info
+            out[nome] = {"preco": float(fi["last_price"]), "fechamento_anterior": float(fi["previous_close"]),
+                         "moeda": fi["currency"]}
+        except Exception:  # noqa: BLE001 - simbolo fora do ar nao pode derrubar os outros
             continue
     return out
+
+
+def cotacao_atual(tickers: list[tuple[str, str]], ticker_factory=None) -> dict[str, dict]:
+    """Última cotação (atrasada ~15 min na B3) para a UI."""
+    return cotacoes({ativo: simbolo_yahoo(ativo, mercado) for ativo, mercado in tickers}, ticker_factory)
+
+
+def cotacao_benchmarks(ticker_factory=None) -> dict[str, dict]:
+    return cotacoes({nome: simbolo for nome, (simbolo, _) in BENCHMARKS.items()}, ticker_factory)
 
 
 def fechamento_em(ativo: str, mercado: str, quando, baixar=None) -> dict | None:

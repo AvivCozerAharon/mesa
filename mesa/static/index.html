@@ -336,13 +336,17 @@ $('btnLogin').onclick = async () => {
 $('senha').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnLogin').click(); });
 
 // ---- fita macro ----
-async function macro() {
-  const m = await api('/macro'), b = m.benchmarks;
+async function macro(aoVivo = true) {
+  const m = await api('/macro' + (aoVivo ? '?ao_vivo=1' : '')), b = m.benchmarks;
   const rot = {IBOV:'Ibovespa', SP500:'S&P 500', NASDAQ:'Nasdaq', IFIX:'IFIX', USDBRL:'dólar'};
   let html = '';
   for (const k of ['IBOV','SP500','NASDAQ','USDBRL','IFIX']) { const x = b[k]; if (!x) continue;
-    html += `<div data-dica="${esc(rot[k])} · fechamento de ${dataBR(x.data)}|1 mês ${pct(x.var_1m)}">
-      <span>${rot[k]}</span> <b class="num">${fmt(x.ultimo, k==='USDBRL'?3:0)}</b> <b class="num ${cls(x.var_1d)}">${pct(x.var_1d)}</b></div>`; }
+    const quando = x.ao_vivo
+      ? `última negociação · consultado às ${x.hora} (Yahoo, ~15 min de atraso)|fechamento anterior ${fmt(x.fechamento_anterior, k==='USDBRL'?3:0)} em ${dataBR(x.data_fechamento)}`
+      : `fechamento de ${dataBR(x.data)}|1 mês ${pct(x.var_1m)}`;
+    html += `<div data-dica="${esc(rot[k])} · ${esc(quando)}">
+      <span>${rot[k]}${x.ao_vivo ? '<i title="última negociação, não o fechamento guardado" style="font-style:normal;color:var(--alta)"> •</i>' : ''}</span>
+      <b class="num">${fmt(x.ultimo, k==='USDBRL'?3:0)}</b> <b class="num ${cls(x.var_1d)}">${pct(x.var_1d)}</b></div>`; }
   for (const [pais, c] of Object.entries(m.curvas || {})) {
     const pts = c.pontos || [], p = pts.find(p => /10 Yr|2035/.test(p.titulo + ' ' + p.vencimento)) || pts[Math.floor(pts.length/2)];
     if (p) html += `<div data-dica="${esc(p.titulo)} · vence em ${dataBR(String(p.vencimento).slice(0,10))}|taxa de ${dataBR(c.data)}">
@@ -806,7 +810,7 @@ async function plantao() {
   // repetir a regra aqui só criaria uma segunda verdade — e foi assim que "VOO" virou notícia de avião.
   const [gerais, m, ...porPosicao] = await Promise.all([
     api('/noticias?dias=2'),
-    macroCache ? Promise.resolve(macroCache) : api('/macro'),
+    macroCache ? Promise.resolve(macroCache) : api('/macro?ao_vivo=1'),
     ...pos.map(p => api('/noticias?posicao=' + p.id + '&dias=2').then(r => r.map(n => ({...n, ativo: p.ativo}))).catch(() => [])),
   ]);
   macroCache = m;
@@ -828,7 +832,7 @@ async function plantao() {
   const b = m.benchmarks || {}, rot = {IBOV:'Ibovespa', SP500:'S&P 500', NASDAQ:'Nasdaq', IFIX:'IFIX', USDBRL:'dólar'};
   const blocos = [];
   const indices = Object.keys(rot).filter(k => b[k]).map(k => cartao(rot[k], fmt(b[k].ultimo, k === 'USDBRL' ? 3 : 0),
-    `${pct(b[k].var_1d)} no dia · ${dataBR(b[k].data)}`, (b[k].var_1d || 0) >= 0 ? 'sobe' : 'desce'));
+    `${pct(b[k].var_1d)} · ${b[k].ao_vivo ? 'última negociação' : dataBR(b[k].data)}`, (b[k].var_1d || 0) >= 0 ? 'sobe' : 'desce'));
   if (indices.length) blocos.push(`<div class="bloco2"><h3>índices e câmbio</h3><div class="cartoes">${indices.join('')}</div></div>`);
 
   for (const [pais, c] of Object.entries(m.curvas || {})) {
@@ -880,6 +884,7 @@ tudo();
 setInterval(() => {
   if (document.hidden) return;  // aba escondida não precisa cutucar o Yahoo nem o servidor
   carregarCarteira(true).catch(()=>{});
+  macro().catch(()=>{});
   operacao().catch(()=>{});
 }, 60000);
 </script>

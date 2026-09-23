@@ -122,3 +122,32 @@ def test_mandato_gera_termos_com_ia(ambiente):
     assert r2.json()["busca"] == "manual"  # busca preenchida nao e sobrescrita sem pedir
     r3 = cli.put(f"/posicoes/{fid}", json={"gerar_termos": True})
     assert r3.json()["busca"] == "debêntures incentivadas;crédito privado"
+
+
+def test_macro_ao_vivo_usa_cotacao_e_marca_o_fechamento(ambiente, monkeypatch):
+    """A barra diária do Yahoo fica com Close vazio por horas depois do pregão; a fita mostra cotação."""
+    cfg = ambiente[0]
+    import mesa.api as api_mod
+    monkeypatch.setattr(api_mod, "cotacao_benchmarks",
+                        lambda: {"SP500": {"preco": 7764.64, "fechamento_anterior": 7650.50, "moeda": "USD"}})
+    cli = TestClient(criar_app(cfg))
+    parado = cli.get("/macro").json()["benchmarks"]
+    vivo = cli.get("/macro?ao_vivo=1").json()["benchmarks"]
+    assert "ao_vivo" not in parado["SP500"] and parado["SP500"]["ultimo"] != 7764.64
+    assert vivo["SP500"]["ao_vivo"] and vivo["SP500"]["ultimo"] == 7764.64 and vivo["SP500"]["hora"]
+    assert vivo["SP500"]["data_fechamento"] == parado["SP500"]["data"]
+    assert vivo["SP500"]["var_1d"] == pytest.approx((7764.64 / 7650.50 - 1) * 100)
+    assert vivo["IBOV"]["ultimo"] == parado["IBOV"]["ultimo"]  # sem cotação, segue o fechamento guardado
+
+
+def test_cotacoes_isola_simbolo_quebrado():
+    from mesa.fontes.yahoo import cotacoes
+
+    class Fake:
+        def __init__(self, simbolo):
+            if simbolo == "^QUEBRA":
+                raise RuntimeError("delisted")
+            self.fast_info = {"last_price": 7764.64, "previous_close": 7650.5, "currency": "USD"}
+
+    r = cotacoes({"SP500": "^GSPC", "X": "^QUEBRA"}, ticker_factory=Fake)
+    assert list(r) == ["SP500"] and r["SP500"]["preco"] == 7764.64
