@@ -45,6 +45,10 @@ def parse_cadastro(zip_bytes: bytes) -> pd.DataFrame:
     ler = lambda nome: pd.read_csv(io.BytesIO(zipfile.ZipFile(io.BytesIO(zip_bytes)).read(nome)), sep=";", dtype=str,  # noqa: E731
                                    encoding="latin-1", quoting=csv.QUOTE_NONE, on_bad_lines="skip", engine="python")
     classe, fundo = ler("registro_classe.csv"), ler("registro_fundo.csv")
+    try:
+        subclasse = ler("registro_subclasse.csv")
+    except Exception:  # noqa: BLE001 - zip antigo, sem o arquivo de subclasses
+        subclasse = None
     gestor = fundo.drop_duplicates("ID_Registro_Fundo", keep="last").set_index("ID_Registro_Fundo")["Gestor"]
     out = pd.DataFrame({
         "cnpj": classe["CNPJ_Classe"].map(so_digitos),
@@ -58,7 +62,33 @@ def parse_cadastro(zip_bytes: bytes) -> pd.DataFrame:
         "data_pl": classe["Data_Patrimonio_Liquido"].fillna(""),
         "gestor": classe["ID_Registro_Fundo"].map(gestor).fillna(""),
     })
-    return out[out["cnpj"].str.len() == 14].drop_duplicates("cnpj", keep="last")
+    out["subclasse"] = ""
+    out = out[out["cnpj"].str.len() == 14].drop_duplicates("cnpj", keep="last")
+    if subclasse is None or subclasse.empty:
+        return out
+    # Cada subclasse herda CNPJ, gestor e classe da sua classe; o que muda e o nome, a situacao e a taxa.
+    por_classe = classe.drop_duplicates("ID_Registro_Classe", keep="last").set_index("ID_Registro_Classe")
+    sub = pd.DataFrame({
+        "cnpj": subclasse["ID_Registro_Classe"].map(por_classe["CNPJ_Classe"]).map(so_digitos),
+        "subclasse": subclasse["ID_Subclasse"].fillna("").str.strip(),
+        "nome": subclasse["Denominacao_Social"].fillna("").str.strip(),
+        "nome_classe": subclasse["ID_Registro_Classe"].map(por_classe["Denominacao_Social"]).fillna("").str.strip(),
+        "classe": subclasse["ID_Registro_Classe"].map(por_classe["Classificacao"]).fillna(""),
+        "tipo_classe": subclasse["ID_Registro_Classe"].map(por_classe["Tipo_Classe"]).fillna(""),
+        "classe_anbima": subclasse["ID_Registro_Classe"].map(por_classe["Classificacao_Anbima"]).fillna(""),
+        "situacao": subclasse["Situacao"].fillna(""),
+        "publico_alvo": subclasse["Publico_Alvo"].fillna(""),
+        "pl": pd.NA,  # PL e publicado por classe, nao por subclasse
+        "data_pl": "",
+        "gestor": subclasse["ID_Registro_Classe"].map(por_classe["ID_Registro_Fundo"]).map(gestor).fillna(""),
+    })
+    # Muita subclasse se chama so "SUBCLASSE A": sozinho nao da para achar na busca nem entender na tela.
+    curto = sub["nome"].str.len() < 25
+    sub["nome"] = (sub["nome_classe"] + " — " + sub["nome"]).where(curto & (sub["nome_classe"] != ""), sub["nome"]).str.strip()
+    sub = sub.drop(columns=["nome_classe"])
+    sub = sub[(sub["cnpj"].str.len() == 14) & (sub["subclasse"] != "")].drop_duplicates(["cnpj", "subclasse"], keep="last")
+    sub["pl"] = sub["cnpj"].map(out.set_index("cnpj")["pl"])  # PL da classe, para ordenar a busca
+    return pd.concat([out, sub], ignore_index=True)
 
 
 def parse_lamina(zip_bytes: bytes, data_ref: str) -> pd.DataFrame:
@@ -81,8 +111,10 @@ def parse_informe(csv_bytes: bytes, cnpjs: set[str]) -> pd.DataFrame:
     df = df[df["cnpj"].isin(cnpjs)]
     if df.empty:
         return pd.DataFrame()
+    sub = df["ID_SUBCLASSE"].fillna("").str.strip() if "ID_SUBCLASSE" in df.columns else ""
     return pd.DataFrame({
         "cnpj": df["cnpj"].values,
+        "subclasse": sub.values if hasattr(sub, "values") else sub,
         "data": pd.to_datetime(df["DT_COMPTC"]).dt.date.values,
         "cota": pd.to_numeric(df["VL_QUOTA"], errors="coerce").values,
         "pl": pd.to_numeric(df["VL_PATRIM_LIQ"], errors="coerce").values,

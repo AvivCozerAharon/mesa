@@ -51,6 +51,11 @@
   .fita::-webkit-scrollbar{display:none}
   .fita b{font-weight:500;font-size:14px} .fita span{color:var(--tinta2);font-size:13px}
   #relogio{color:var(--tinta2);font-size:13px;font-variant-numeric:tabular-nums}
+  .fita div{cursor:help}
+  #dica{position:fixed;z-index:30;background:var(--tinta);color:var(--papel);padding:6px 9px;font-size:12px;line-height:1.4;
+        max-width:280px;pointer-events:none;opacity:0;transition:opacity .1s;box-shadow:0 6px 16px rgba(0,0,0,.25)}
+  #dica.ver{opacity:1}
+  @media (prefers-reduced-motion:reduce){ #dica{transition:none} }
 
   main{display:grid;grid-template-columns:300px minmax(0,1fr) 340px;height:calc(100vh - 44px)}
   .painel{overflow-y:auto;min-width:0}
@@ -124,14 +129,46 @@
 
   /* busca de ativo */
   .combo{position:relative}
-  .sugestoes{position:absolute;z-index:3;left:0;right:0;top:calc(100% + 3px);background:var(--cartao);border:1px solid var(--tinta2);
-             max-height:290px;overflow-y:auto;list-style:none;margin:0;padding:0;box-shadow:0 6px 18px rgba(0,0,0,.18)}
+  /* fixed, e não absolute: dentro do modal (que rola) uma lista absoluta ficava cortada na borda */
+  .sugestoes{position:fixed;z-index:20;background:var(--cartao);border:1px solid var(--tinta2);
+             max-height:min(46vh,340px);overflow-y:auto;list-style:none;margin:0;padding:0;box-shadow:0 10px 26px rgba(0,0,0,.22)}
   .sugestoes:empty{display:none}
-  .sugestoes li{padding:7px 10px;cursor:pointer;display:grid;grid-template-columns:1fr auto;gap:2px 10px}
-  .sugestoes li[aria-selected="true"]{background:var(--papel2)}
-  .sugestoes .cod{font-weight:600;font-size:14px}
-  .sugestoes .onde{font-size:12px;color:var(--tinta2);text-align:right}
-  .sugestoes .desc{grid-column:1/-1;font-size:12px;color:var(--tinta2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sugestoes li{padding:7px 10px;cursor:pointer;display:grid;grid-template-columns:1fr auto;gap:2px 12px;align-items:baseline}
+  .sugestoes li[aria-selected="true"]{background:var(--papel2);box-shadow:inset 2px 0 0 var(--tinta)}
+  .sugestoes .cod{font-weight:600;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sugestoes .ident{font-size:12px;color:var(--tinta2);text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+  .sugestoes .desc{font-size:12px;color:var(--tinta2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .sugestoes .onde{font-size:12px;color:var(--tinta3);text-align:right;white-space:nowrap}
+
+  /* Plantão: tela cheia para deixar aberta num monitor — escura mesmo no tema claro, porque aqui
+     o trabalho é varrer números e manchetes de longe, não ler. */
+  #plantao{position:fixed;inset:0;z-index:40;background:#0E1416;color:#D8DEDC;display:none;
+           grid-template-rows:auto minmax(0,1fr);font-family:var(--sans)}
+  #plantao.aberto{display:grid}
+  #plantao .cab{display:flex;align-items:baseline;gap:16px;padding:10px 18px;border-bottom:1px solid #222C2F;background:#131A1C}
+  #plantao .cab h2{font-family:var(--serif);font-size:20px;color:#EDEFEA}
+  #plantao .cab .agora{margin-left:auto;font-variant-numeric:tabular-nums;color:#7E8C90}
+  #plantao .corpo{display:grid;grid-template-columns:minmax(0,1fr) 420px;min-height:0}
+  #plantao .noticias{overflow-y:auto;padding:4px 0}
+  #plantao .noticias li{display:grid;grid-template-columns:52px minmax(0,1fr) auto;gap:12px;padding:6px 18px;
+                        border-bottom:1px solid #1A2325;align-items:baseline}
+  #plantao .noticias li:hover{background:#151D1F}
+  #plantao .noticias .hora{color:#6D7B7F;font-variant-numeric:tabular-nums;font-size:13px}
+  #plantao .noticias a{color:#D8DEDC;text-decoration:none;font-size:14px}
+  #plantao .noticias a:hover{color:#F0C36B;text-decoration:underline}
+  #plantao .noticias .fonte{color:#5E6C70;font-size:12px}
+  #plantao .noticias .dela{color:#F0C36B;font-size:12px}
+  #plantao .paineis{overflow-y:auto;border-left:1px solid #222C2F;padding:12px 14px;background:#111719}
+  #plantao .bloco2{margin-bottom:16px}
+  #plantao .bloco2 h3{font-size:12px;color:#6D7B7F;font-weight:500;margin-bottom:6px}
+  #plantao .cartoes{display:grid;grid-template-columns:repeat(auto-fill,minmax(122px,1fr));gap:7px}
+  #plantao .cartao{border:1px solid #263133;background:#161E20;padding:6px 8px}
+  #plantao .cartao .n{font-size:11px;color:#7E8C90;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  #plantao .cartao .v{font-size:17px;font-variant-numeric:tabular-nums;margin-top:1px}
+  #plantao .cartao .d{font-size:11px;color:#5E6C70;font-variant-numeric:tabular-nums}
+  #plantao .sobe{color:#6FB98D} #plantao .desce{color:#E08272}
+  #plantao .vazio2{color:#5E6C70;padding:20px 18px;font-family:var(--serif)}
+  @media (max-width:900px){ #plantao .corpo{grid-template-columns:1fr;grid-template-rows:1fr auto} }
 
   .veu{position:fixed;inset:0;background:rgba(10,16,18,.55);display:none;align-items:flex-start;justify-content:center;z-index:9;padding:7vh 16px}
   .veu.aberto{display:flex}
@@ -151,8 +188,10 @@
 <div class="topo">
   <h1 class="marca">mesa</h1>
   <div class="fita" id="fita"></div>
+  <button id="btnPlantao" style="padding:3px 10px;font-size:13px">Plantão</button>
   <span id="relogio"></span>
 </div>
+<div id="dica" role="tooltip"></div>
 
 <main>
   <div class="painel esq">
@@ -167,7 +206,7 @@
       <ul class="razao" id="posicoes"></ul>
       <div class="chaves" style="margin-top:12px">
         <span><span class="sinal sim">✓</span> tese de pé</span><span><span class="sinal revisar">?</span> revisar</span>
-        <span><span class="sinal nao_avaliavel">—</span> sem elementos</span><span><kbd>j</kbd> <kbd>k</kbd> navega</span>
+        <span><span class="sinal nao_avaliavel">—</span> sem elementos</span><span><kbd>j</kbd> <kbd>k</kbd> navega · <kbd>n</kbd> lança · <kbd>p</kbd> plantão</span>
       </div>
     </div>
   </div>
@@ -222,6 +261,19 @@
         <span class="fraco" style="font-size:13px" id="jobStatus"></span></div></div>
   </div>
 </main>
+
+<div id="plantao" aria-hidden="true">
+  <div class="cab">
+    <h2>Plantão</h2>
+    <span style="color:#6D7B7F;font-size:13px" id="pResumo">carregando…</span>
+    <span class="agora" id="pAgora"></span>
+    <button id="pFechar" style="background:#1B2427;border-color:#2C3639;color:#D8DEDC">Fechar <kbd style="border-color:#3A4548;color:#7E8C90">esc</kbd></button>
+  </div>
+  <div class="corpo">
+    <ul class="noticias" id="pNoticias"></ul>
+    <div class="paineis" id="pPaineis"></div>
+  </div>
+</div>
 
 <div class="veu" id="login"><div class="caixa"><h2>mesa</h2>
   <p class="prosa fraco">Sua carteira, suas teses. A senha é a que está em MESA_SENHA.</p>
@@ -289,12 +341,34 @@ async function macro() {
   const rot = {IBOV:'Ibovespa', SP500:'S&P 500', NASDAQ:'Nasdaq', IFIX:'IFIX', USDBRL:'dólar'};
   let html = '';
   for (const k of ['IBOV','SP500','NASDAQ','USDBRL','IFIX']) { const x = b[k]; if (!x) continue;
-    html += `<div><span>${rot[k]}</span> <b class="num">${fmt(x.ultimo, k==='USDBRL'?3:0)}</b> <b class="num ${cls(x.var_1d)}">${pct(x.var_1d)}</b></div>`; }
+    html += `<div data-dica="${esc(rot[k])} · fechamento de ${dataBR(x.data)}|1 mês ${pct(x.var_1m)}">
+      <span>${rot[k]}</span> <b class="num">${fmt(x.ultimo, k==='USDBRL'?3:0)}</b> <b class="num ${cls(x.var_1d)}">${pct(x.var_1d)}</b></div>`; }
   for (const [pais, c] of Object.entries(m.curvas || {})) {
     const pts = c.pontos || [], p = pts.find(p => /10 Yr|2035/.test(p.titulo + ' ' + p.vencimento)) || pts[Math.floor(pts.length/2)];
-    if (p) html += `<div><span>juros ${pais}</span> <b class="num">${fmt(p.taxa,2)}%</b> <span>${esc(p.titulo.replace('Tesouro ',''))}</span></div>`; }
+    if (p) html += `<div data-dica="${esc(p.titulo)} · vence em ${dataBR(String(p.vencimento).slice(0,10))}|taxa de ${dataBR(c.data)}">
+      <span>juros ${pais}</span> <b class="num">${fmt(p.taxa,2)}%</b> <span>${esc(p.titulo.replace('Tesouro ',''))}</span></div>`; }
   $('fita').innerHTML = html;
+  macroCache = m;
 }
+
+// A fita mostra fechamento, não tempo real: a dica diz de quando é cada número e quando foi coletado.
+const dataBR = d => !d ? '–' : String(d).slice(0,10).split('-').reverse().join('/');
+let coletas = {};
+function dicaDe(el) {
+  const [linha1, linha2] = (el.dataset.dica || '').split('|');
+  const c = coletas['yahoo'] || coletas['tesouro'] || coletas['treasury_us'];
+  const quando = c ? `coletado ${dataBR(c.executada_em)} às ${c.executada_em.slice(11,16)}` : 'ainda não coletado nesta máquina';
+  return `${linha1}<br>${linha2 || ''}<br><span style="opacity:.7">${quando}</span>`;
+}
+$('fita').addEventListener('mouseover', e => {
+  const alvo = e.target.closest('[data-dica]'); if (!alvo) return;
+  const d = $('dica'); d.innerHTML = dicaDe(alvo);
+  const r = alvo.getBoundingClientRect();
+  d.style.left = Math.min(r.left, innerWidth - 290) + 'px';
+  d.style.top = (r.bottom + 6) + 'px';
+  d.classList.add('ver');
+});
+$('fita').addEventListener('mouseout', () => $('dica').classList.remove('ver'));
 
 // ---- carteira ----
 async function carregarCarteira(aoVivo=false) {
@@ -344,6 +418,7 @@ async function apagar(id) {
 }
 document.addEventListener('keydown', e => {
   if (['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName) || !carteira || e.metaKey || e.ctrlKey) return;
+  if ($('plantao').classList.contains('aberto')) return;
   const ids = carteira.posicoes.map(p => p.id), i = ids.indexOf(sel);
   if (e.key === 'j') selecionar(ids[Math.min(ids.length-1, i+1)]);
   else if (e.key === 'k') selecionar(ids[Math.max(0, i-1)]);
@@ -555,6 +630,7 @@ $('disparos').addEventListener('click', async e => { const a = e.target.closest(
 async function operacao() {
   const o = await api('/operacao'), ult = {};
   o.coletas.forEach(c => { if (!ult[c.fonte]) ult[c.fonte] = c; });
+  coletas = ult;
   $('operacao').innerHTML = Object.values(ult).map(c => `<span>${esc(c.fonte)}</span>
     <span class="${c.erro?'e':''}" title="${esc(c.erro||'')}">${c.erro ? 'erro' : (c.linhas ?? '–') + ' linhas · ' + (c.duracao_ms/1000).toFixed(0) + 's'}
     <span class="fraco">${c.executada_em.slice(5,16).replace('T',' ')}</span></span>`).join('');
@@ -577,11 +653,25 @@ $('nova').addEventListener('keydown', e => { if (e.key === 'Escape') $('nova').c
 
 function pintarSugestoes() {
   $('nLista').innerHTML = sugestoes.map((s, i) => `<li role="option" data-i="${i}" aria-selected="${i===marcado}">
-    <span class="cod">${esc(s.tipo === 'fundo' ? s.ativo.slice(0, 42) : s.identificador)}</span>
-    <span class="onde">${esc(s.onde)}${s.inativo ? ' · encerrado' : ''}</span>
-    <span class="desc">${esc(s.detalhe || s.ativo)}</span></li>`).join('');
+    <span class="cod">${esc(s.tipo === 'fundo' ? s.ativo.slice(0, 46) : s.identificador)}</span>
+    <span class="ident">${esc(s.codigo || s.identificador)}</span>
+    <span class="desc">${esc(s.detalhe || s.ativo)}</span>
+    <span class="onde">${esc(s.onde)}${s.inativo ? ' · encerrado' : ''}</span></li>`).join('');
   $('nBusca').setAttribute('aria-expanded', sugestoes.length > 0);
+  posicionarSugestoes();
 }
+function posicionarSugestoes() {
+  const l = $('nLista');
+  if (!sugestoes.length) return;
+  const r = $('nBusca').getBoundingClientRect();
+  const espacoAbaixo = innerHeight - r.bottom;
+  l.style.left = r.left + 'px';
+  l.style.width = r.width + 'px';
+  if (espacoAbaixo < 200 && r.top > espacoAbaixo) { l.style.top = 'auto'; l.style.bottom = (innerHeight - r.top + 4) + 'px'; }
+  else { l.style.bottom = 'auto'; l.style.top = (r.bottom + 4) + 'px'; }
+}
+addEventListener('resize', posicionarSugestoes);
+$('nova').addEventListener('scroll', posicionarSugestoes, true);
 $('nBusca').addEventListener('input', () => {
   clearTimeout(atraso);
   const q = $('nBusca').value.trim();
@@ -686,6 +776,82 @@ $('btnCriar').onclick = async () => {
     carregarCarteira();
   } catch (e) { $('nAviso').textContent = e.message; }
 };
+
+// ---- plantão ----
+let macroCache = null, timerPlantao = null;
+const horaDe = t => !t ? '' : String(t).slice(11, 16);
+function cartao(nome, valor, extra, cor) {
+  return `<div class="cartao"><div class="n" title="${esc(nome)}">${esc(nome)}</div>
+    <div class="v ${cor || ''}">${valor}</div><div class="d">${extra || ''}</div></div>`;
+}
+async function plantao() {
+  const pos = carteira?.posicoes || [];
+  // O casamento por posição é o do servidor (ticker em maiúsculas, nome inteiro, termos do mandato):
+  // repetir a regra aqui só criaria uma segunda verdade — e foi assim que "VOO" virou notícia de avião.
+  const [gerais, m, ...porPosicao] = await Promise.all([
+    api('/noticias?dias=2'),
+    macroCache ? Promise.resolve(macroCache) : api('/macro'),
+    ...pos.map(p => api('/noticias?posicao=' + p.id + '&dias=2').then(r => r.map(n => ({...n, ativo: p.ativo}))).catch(() => [])),
+  ]);
+  macroCache = m;
+  const porUrl = new Map();
+  for (const n of [].concat(...porPosicao, gerais)) {
+    const chave = n.url || n.titulo;
+    if (!porUrl.has(chave)) porUrl.set(chave, n);
+    else if (n.ativo && !porUrl.get(chave).ativo) porUrl.get(chave).ativo = n.ativo;
+  }
+  const ns = [...porUrl.values()].sort((a, b) => String(b.publicada_em || '').localeCompare(String(a.publicada_em || '')));
+  const daCarteira = ns.filter(n => n.ativo).length;
+  $('pNoticias').innerHTML = ns.length ? ns.map(n =>
+    `<li><span class="hora">${horaDe(n.publicada_em)}</span>
+      <a href="${esc(n.url)}" target="_blank" rel="noopener">${esc(n.titulo)}</a>
+      <span class="${n.ativo ? 'dela' : 'fonte'}">${esc(n.ativo || n.fonte || '')}</span></li>`).join('')
+    : '<li class="vazio2">Sem notícias coletadas nas últimas 48 horas. O job da manhã busca por você às 7h.</li>';
+  $('pResumo').textContent = `${ns.length} manchetes nas últimas 48 h · ${daCarteira} tocam a sua carteira`;
+
+  const b = m.benchmarks || {}, rot = {IBOV:'Ibovespa', SP500:'S&P 500', NASDAQ:'Nasdaq', IFIX:'IFIX', USDBRL:'dólar'};
+  const blocos = [];
+  const indices = Object.keys(rot).filter(k => b[k]).map(k => cartao(rot[k], fmt(b[k].ultimo, k === 'USDBRL' ? 3 : 0),
+    `${pct(b[k].var_1d)} no dia · ${dataBR(b[k].data)}`, (b[k].var_1d || 0) >= 0 ? 'sobe' : 'desce'));
+  if (indices.length) blocos.push(`<div class="bloco2"><h3>índices e câmbio</h3><div class="cartoes">${indices.join('')}</div></div>`);
+
+  for (const [pais, c] of Object.entries(m.curvas || {})) {
+    const antes = new Map((c.pontos_1m || []).map(x => [x.titulo + x.vencimento, x.taxa]));
+    const pts = (c.pontos || []).slice().sort((x, y) => String(x.vencimento).localeCompare(String(y.vencimento))).slice(0, 12);
+    if (!pts.length) continue;
+    const cartoes = pts.map(x => {
+      const ant = antes.get(x.titulo + x.vencimento), dif = ant == null ? null : (x.taxa - ant) * 100;
+      return cartao(x.titulo.replace('Tesouro ', '').replace('U.S. Treasury ', ''), fmt(x.taxa, 2) + '%',
+        (dif == null ? '' : `${dif > 0 ? '+' : ''}${fmt(dif, 0)} p.b. no mês · `) + String(x.vencimento).slice(0, 4),
+        dif == null ? '' : dif > 0 ? 'desce' : 'sobe');  // juro subindo é preço do título caindo
+    });
+    blocos.push(`<div class="bloco2"><h3>juros ${pais === 'BR' ? 'Brasil' : 'Estados Unidos'} · ${dataBR(c.data)}</h3>
+      <div class="cartoes">${cartoes.join('')}</div></div>`);
+  }
+  const cartoesPos = pos.map(p => cartao(p.ativo, fmt(p.preco, p.tipo === 'fundo' ? 4 : 2),
+    `${pct(p.pnl_pct)} desde a compra`, (p.pnl_pct || 0) >= 0 ? 'sobe' : 'desce'));
+  if (cartoesPos.length) blocos.push(`<div class="bloco2"><h3>sua carteira</h3><div class="cartoes">${cartoesPos.join('')}</div></div>`);
+  $('pPaineis').innerHTML = blocos.join('');
+  $('pAgora').textContent = new Date().toLocaleTimeString('pt-BR', {hour:'2-digit', minute:'2-digit'}) + ' em São Paulo';
+}
+function abrirPlantao() {
+  $('plantao').classList.add('aberto'); $('plantao').setAttribute('aria-hidden', 'false');
+  plantao().catch(e => { if (e.message !== 'login') console.error(e); });
+  clearInterval(timerPlantao);
+  timerPlantao = setInterval(() => { macroCache = null; plantao().catch(()=>{}); }, 120000);
+  $('pFechar').focus();
+}
+function fecharPlantao() {
+  $('plantao').classList.remove('aberto'); $('plantao').setAttribute('aria-hidden', 'true');
+  clearInterval(timerPlantao); timerPlantao = null;
+}
+$('btnPlantao').onclick = abrirPlantao;
+$('pFechar').onclick = fecharPlantao;
+addEventListener('keydown', e => {
+  if (e.key === 'Escape' && $('plantao').classList.contains('aberto')) fecharPlantao();
+  else if (e.key === 'p' && !['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName)
+           && !$('plantao').classList.contains('aberto') && !document.querySelector('.veu.aberto')) abrirPlantao();
+});
 
 async function tudo() {
   try {

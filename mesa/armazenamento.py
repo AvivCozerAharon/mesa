@@ -17,14 +17,20 @@ import pandas as pd
 # fonte -> (view, chave natural)
 VIEWS = {
     "precos": ("precos", ["ativo", "data"]),
-    "cotas_fundos": ("cotas_fundos", ["cnpj", "data"]),
+    "cotas_fundos": ("cotas_fundos", ["cnpj", "subclasse", "data"]),
     "benchmarks": ("benchmarks", ["nome", "data"]),
     "curvas": ("curvas", ["pais", "data", "titulo", "vencimento"]),
-    "fundos_cadastro": ("fundos_cadastro", ["cnpj"]),
+    "fundos_cadastro": ("fundos_cadastro", ["cnpj", "subclasse"]),
     "fundos_taxas": ("fundos_taxas", ["cnpj"]),
     "fundamentos": ("fundamentos", ["ativo"]),
     "dre_trimestral": ("dre_trimestral", ["ativo", "trimestre"]),
 }
+
+
+def partes_fundo(identificador: str) -> tuple[str, str]:
+    """"<cnpj>" ou "<cnpj>:<subclasse>" -> (cnpj, subclasse)."""
+    cnpj, _, sub = str(identificador).partition(":")
+    return cnpj, sub
 
 
 def agora_utc() -> datetime:
@@ -57,13 +63,29 @@ class Consulta:
             pasta = self.dados_dir / fonte
             if not pasta.exists() or not any(pasta.glob("*.parquet")):
                 continue
-            particao = ", ".join(chave)
+            leitura = f"read_parquet('{pasta.as_posix()}/*.parquet', union_by_name=true)"
+            # Coluna nova (ex.: `subclasse`) só existe nos Parquet gravados depois dela; a chave de
+            # deduplicação usa o que de fato está lá, senão a view inteira quebra para dados antigos.
+            colunas = {r[0] for r in con.execute(f"DESCRIBE SELECT * FROM {leitura}").fetchall()}
+            # `subclasse` nasceu depois: Parquet antigo traz NULL e o novo traz '', e NULL != '' faria
+            # a mesma linha sobreviver duas vezes a deduplicacao.
+            particao = ", ".join(f"coalesce({c}, '')" if c == "subclasse" else c for c in chave if c in colunas) or "1"
             con.execute(f"""
                 CREATE VIEW {view} AS
-                SELECT * FROM read_parquet('{pasta.as_posix()}/*.parquet', union_by_name=true)
+                SELECT * FROM {leitura}
                 QUALIFY row_number() OVER (PARTITION BY {particao} ORDER BY coletado_em DESC) = 1
             """)
         return con
+
+    def colunas(self, view: str) -> set[str]:
+        con = self.duck()
+        try:
+            existentes = {r[0] for r in con.execute("SELECT view_name FROM duckdb_views() WHERE NOT internal").fetchall()}
+            if view not in existentes:
+                return set()
+            return {r[0] for r in con.execute(f"DESCRIBE SELECT * FROM {view}").fetchall()}
+        finally:
+            con.close()
 
     def _df(self, sql: str, params: list) -> pd.DataFrame:
         con = self.duck()
@@ -90,12 +112,28 @@ class Consulta:
             return pd.Series(dtype=float)
         return pd.Series(df["valor"].values, index=pd.to_datetime(df["data"]), name=nome)
 
-    def cotas(self, cnpjs: list[str], inicio: date | None = None, fim: date | None = None) -> pd.DataFrame:
-        if not cnpjs:
+    def cotas(self, ids: list[str], inicio: date | None = None, fim: date | None = None, por_cnpj: bool = False) -> pd.DataFrame:
+        """`ids`: CNPJ ou "<cnpj>:<subclasse>". A coluna `identificador` volta na mesma forma do pedido.
+
+        Uma classe com subclasses publica uma cota por subclasse e nenhuma "da classe"; por isso pedir
+        só o CNPJ devolve as linhas sem subclasse. `por_cnpj=True` (usado para os pares) aceita qualquer
+        subclasse, uma por dia, porque ali só interessa a série de comparação.
+        """
+        if not ids:
             return pd.DataFrame()
+        pares = [partes_fundo(i) for i in ids]
+        cnpjs = sorted({c for c, _ in pares})
         marcas = ", ".join("?" for _ in cnpjs)
-        return self._df(f"SELECT * FROM cotas_fundos WHERE cnpj IN ({marcas}) AND data >= ? AND data <= ? ORDER BY cnpj, data",
-                        [*cnpjs, inicio or date(1900, 1, 1), fim or date(2100, 1, 1)])
+        df = self._df(f"SELECT * FROM cotas_fundos WHERE cnpj IN ({marcas}) AND data >= ? AND data <= ? ORDER BY cnpj, data",
+                      [*cnpjs, inicio or date(1900, 1, 1), fim or date(2100, 1, 1)])
+        if df.empty:
+            return df
+        sub = df["subclasse"].fillna("") if "subclasse" in df.columns else pd.Series([""] * len(df), index=df.index)
+        df["subclasse"] = sub
+        df["identificador"] = df["cnpj"].where(sub == "", df["cnpj"] + ":" + sub)
+        if por_cnpj:
+            return df.sort_values(["cnpj", "subclasse", "data"]).drop_duplicates(["cnpj", "data"])
+        return df[df["identificador"].isin(set(ids))]
 
     def curvas(self, pais: str, datas: list[date]) -> pd.DataFrame:
         if not datas:
@@ -103,17 +141,19 @@ class Consulta:
         marcas = ", ".join("?" for _ in datas)
         return self._df(f"SELECT * FROM curvas WHERE pais = ? AND data IN ({marcas}) ORDER BY data, vencimento", [pais, *datas])
 
-    def cadastro_fundos(self, cnpjs: list[str] | None = None) -> pd.DataFrame:
-        if cnpjs is None:
+    def cadastro_fundos(self, ids: list[str] | None = None) -> pd.DataFrame:
+        if ids is None:
             return self._df("SELECT * FROM fundos_cadastro", [])
-        if not cnpjs:
+        if not ids:
             return pd.DataFrame()
+        cnpjs = sorted({partes_fundo(i)[0] for i in ids})
         marcas = ", ".join("?" for _ in cnpjs)
         return self._df(f"SELECT * FROM fundos_cadastro WHERE cnpj IN ({marcas})", cnpjs)
 
-    def taxas_fundos(self, cnpjs: list[str]) -> pd.DataFrame:
-        if not cnpjs:
+    def taxas_fundos(self, ids: list[str]) -> pd.DataFrame:
+        if not ids:
             return pd.DataFrame()
+        cnpjs = sorted({partes_fundo(i)[0] for i in ids})
         marcas = ", ".join("?" for _ in cnpjs)
         return self._df(f"SELECT * FROM fundos_taxas WHERE cnpj IN ({marcas})", cnpjs)
 

@@ -47,13 +47,27 @@ Em produção: http://<ec2>:8100 (senha única).
 
 Buscar por nome em vez de decorar código: `/buscar` junta ticker (busca do Yahoo, filtrada para B3 e
 bolsas americanas, com o tipo deduzido do sufixo — 11 é FII ou ETF, 31–39 é BDR), fundo por nome ou
-CNPJ (36 mil classes do cadastro CVM, maior PL primeiro) e título do Tesouro (das curvas já baixadas).
-Cada fonte falha sozinha: sem Yahoo, fundo e Tesouro continuam.
+CNPJ (47 mil classes e subclasses do cadastro CVM, maior PL primeiro) e título do Tesouro (das curvas
+já baixadas). Cada linha mostra o identificador ao lado — ticker, CNPJ ou CNPJ + subclasse. Cada fonte
+falha sozinha: sem Yahoo, fundo e Tesouro continuam; e termo que não pode ser ticker (CNPJ, "tesouro
+ipca") nem chega a sair para a internet.
+
+**Subclasses (RCVM 175).** A mesma classe publica uma cota por subclasse — taxas diferentes, cota
+diferente. O identificador da posição vira `<cnpj>:<ID_SUBCLASSE>`, e a série de cotas é filtrada por
+ele; pedir só o CNPJ devolve as linhas sem subclasse. A comparação com pares continua por CNPJ, com
+uma subclasse por dia, porque ali só interessa a série.
 
 Uma compra se lança por **data + quanto você pôs**; `/cotacao?data=` acha o preço daquele dia — cota no
 informe diário da CVM (os zips mensais já estão em cache pelo job), PU na curva do Tesouro, fechamento
 guardado ou, para papel novo, no Yahoo — e daí sai a quantidade. Dia sem pregão cai no anterior, e a UI
 diz de que dia veio o preço.
+
+### Plantão
+
+Tela cheia (botão no topo ou `p`) para deixar num segundo monitor: as manchetes das últimas 48 horas em
+ordem, marcando as que casaram com alguma posição, e os preços que importam — índices e câmbio, a curva
+de juros brasileira e a americana com a variação em pontos-base no mês, e as suas posições. Atualiza a
+cada dois minutos. É escuro mesmo no tema claro: ali se varre de longe, não se lê.
 
 ### Compras, não um número digitado
 

@@ -8,7 +8,7 @@ from datetime import date, datetime
 
 import pandas as pd
 
-from mesa.armazenamento import Consulta, Db, gravar_parquet
+from mesa.armazenamento import Consulta, Db, gravar_parquet, partes_fundo
 from mesa.calendario import agora_brt
 from mesa.carteira import Carteira, resumo, valorizar
 from mesa.config import Config
@@ -31,7 +31,8 @@ BENCH_POR_TIPO = {"acao": "IBOV", "fii": "IFIX", "etf": "IBOV", "bdr": "SP500", 
 
 
 def contexto(cfg: Config, carteira: Carteira, agora: datetime | None = None) -> Contexto:
-    return Contexto(agora=agora or agora_brt(), tickers=carteira.tickers(), cnpjs=carteira.cnpjs(),
+    return Contexto(agora=agora or agora_brt(), tickers=carteira.tickers(),
+                    cnpjs=sorted({partes_fundo(c)[0] for c in carteira.cnpjs()}),
                     dados_dir=cfg.dados_dir, anos_precos=cfg.anos_precos, meses_cvm=cfg.meses_cvm)
 
 
@@ -104,9 +105,9 @@ def precos_atuais(consulta: Consulta, carteira: Carteira) -> dict[str, tuple[flo
     if cnpjs:
         df = consulta.cotas(cnpjs)
         if not df.empty:
-            for cnpj, sub in df.groupby("cnpj"):
-                ult = sub.sort_values("data").iloc[-1]
-                out[cnpj] = (float(ult["cota"]), pd.Timestamp(ult["data"]).date())
+            for ident, linhas in df.groupby("identificador"):
+                ult = linhas.sort_values("data").iloc[-1]
+                out[ident] = (float(ult["cota"]), pd.Timestamp(ult["data"]).date())
     tesouro = [p.identificador for p in pos if p.tipo == "tesouro"]
     if tesouro:
         curvas = consulta._df("SELECT titulo, vencimento, data, pu FROM curvas WHERE pais = 'BR' AND pu IS NOT NULL ORDER BY data", [])
@@ -147,12 +148,17 @@ def calcular(cfg: Config, db: Db, consulta: Consulta, carteira: Carteira, agora:
                                     **{k: (None if pd.isna(r[k]) else float(r[k])) for k in ("receita", "ebitda", "lucro_operacional", "lucro")}}
                                    for _, r in tri.iterrows()]
         elif p.tipo == "fundo" and not cotas.empty:
-            cota = _serie(cotas, "cnpj", p.identificador, "cota", "cnpj")
-            pl = _serie(cotas, "cnpj", p.identificador, "pl", "cnpj")
-            capt = _serie(cotas, "cnpj", p.identificador, "captacao", "cnpj") - _serie(cotas, "cnpj", p.identificador, "resgate", "cnpj")
-            info = cadastro[cadastro["cnpj"] == p.identificador].iloc[0] if not cadastro.empty and (cadastro["cnpj"] == p.identificador).any() else None
+            cnpj, sub = partes_fundo(p.identificador)
+            cota = _serie(cotas, "identificador", p.identificador, "cota", "identificador")
+            pl = _serie(cotas, "identificador", p.identificador, "pl", "identificador")
+            capt = (_serie(cotas, "identificador", p.identificador, "captacao", "identificador")
+                    - _serie(cotas, "identificador", p.identificador, "resgate", "identificador"))
+            reg = cadastro[(cadastro["cnpj"] == cnpj) & (cadastro.get("subclasse", "").fillna("") == sub)] if not cadastro.empty else cadastro
+            if not cadastro.empty and reg.empty:  # subclasse sem linha propria no cadastro: usa a da classe
+                reg = cadastro[cadastro["cnpj"] == cnpj]
+            info = reg.iloc[0] if not cadastro.empty and not reg.empty else None
             pares = pares_do_fundo(consulta, p.identificador, info)
-            tx = taxas[taxas["cnpj"] == p.identificador].iloc[0] if not taxas.empty and (taxas["cnpj"] == p.identificador).any() else None
+            tx = taxas[taxas["cnpj"] == cnpj].iloc[0] if not taxas.empty and (taxas["cnpj"] == cnpj).any() else None
             bench_decl = (tx["benchmark_declarado"] if tx is not None else "") or ""
             if "IBOV" in bench_decl.upper():
                 b = bench.get("IBOV", b)
@@ -188,10 +194,11 @@ def pares_do_fundo(consulta: Consulta, cnpj: str, info) -> pd.DataFrame | None:
     cad = consulta.cadastro_fundos()
     if cad.empty:
         return None
-    cnpjs = cad[(cad["classe"] == info["classe"]) & (cad["cnpj"] != cnpj)]["cnpj"].tolist()
+    cnpj = partes_fundo(cnpj)[0]
+    cnpjs = sorted(set(cad[(cad["classe"] == info["classe"]) & (cad["cnpj"] != cnpj)]["cnpj"].tolist()))
     if not cnpjs:
         return None
-    cotas = consulta.cotas(cnpjs)
+    cotas = consulta.cotas(cnpjs, por_cnpj=True)
     if cotas.empty:
         return None
     tabela = cotas.pivot_table(index="data", columns="cnpj", values="cota")

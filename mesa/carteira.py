@@ -65,9 +65,13 @@ class Posicao:
                 raise ValueError(f"ticker US inválido: {self.identificador!r}")
             self.ativo = self.ativo.upper() or self.identificador
         elif self.tipo == "fundo":
-            self.identificador = re.sub(r"\D", "", self.identificador)
-            if not cnpj_valido(self.identificador):
-                raise ValueError(f"CNPJ inválido: {self.identificador!r}")
+            # "<cnpj>" ou "<cnpj>:<ID_SUBCLASSE>" (RCVM 175: cada subclasse tem a sua cota)
+            bruto, _, sub = self.identificador.partition(":")
+            cnpj = re.sub(r"\D", "", bruto)
+            if not cnpj_valido(cnpj):
+                raise ValueError(f"CNPJ inválido: {bruto!r}")
+            sub = re.sub(r"[^A-Za-z0-9]", "", sub).upper()
+            self.identificador = f"{cnpj}:{sub}" if sub else cnpj
         elif self.tipo == "tesouro":
             if not RE_TESOURO.match(self.identificador):
                 raise ValueError(f"título do Tesouro inválido: {self.identificador!r} (ex.: 'Tesouro IPCA+ 2035')")
@@ -216,6 +220,7 @@ class Carteira:
         return sorted({(p.identificador, p.mercado) for p in self.listar() if p.mercado in ("B3", "US")})
 
     def cnpjs(self) -> list[str]:
+        """Identificadores dos fundos (com subclasse quando houver); as fontes usam só o CNPJ."""
         return sorted({p.identificador for p in self.listar() if p.tipo == "fundo"})
 
 

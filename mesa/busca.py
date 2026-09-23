@@ -15,7 +15,7 @@ from datetime import date, timedelta
 
 import pandas as pd
 
-from mesa.armazenamento import Consulta
+from mesa.armazenamento import Consulta, partes_fundo
 
 URL_BUSCA = "https://query2.finance.yahoo.com/v1/finance/search"
 CABECALHO = {"User-Agent": "Mozilla/5.0 (compatible; mesa/1.0)"}
@@ -40,19 +40,29 @@ def _de_yahoo(q: dict) -> dict | None:
     nome = (q.get("longname") or q.get("shortname") or "").strip()
     if bolsa == "SAO" and simbolo.endswith(".SA"):
         ident = simbolo[:-3]
-        return {"tipo": tipo_b3(ident, qt), "identificador": ident, "ativo": nome, "mercado": "B3", "moeda": "BRL", "onde": "B3"}
+        return {"tipo": tipo_b3(ident, qt), "identificador": ident, "ativo": nome, "mercado": "B3", "moeda": "BRL",
+                "onde": "B3", "codigo": ident}
     if bolsa in BOLSAS_US:
         return {"tipo": "etf_us" if qt == "ETF" else "acao_us", "identificador": simbolo, "ativo": nome,
-                "mercado": "US", "moeda": "USD", "onde": BOLSAS_US[bolsa]}
+                "mercado": "US", "moeda": "USD", "onde": BOLSAS_US[bolsa], "codigo": simbolo}
     return None
 
 
+def parece_ticker(termo: str) -> bool:
+    """CNPJ ou "tesouro ipca" não têm ticker: não vale pagar a ida ao Yahoo (até 8 s) por eles."""
+    t = termo.strip()
+    letras = sum(c.isalpha() for c in t)
+    if letras < 2 or len(SO_DIGITOS.sub("", t)) >= 8:
+        return False
+    return not any(p in t.upper() for p in ("TESOURO", "IPCA+", "SELIC", "PREFIXADO", "RENDA+"))
+
+
 def tickers(termo: str, limite: int = 6, get=None) -> list[dict]:
-    if len(termo.strip()) < 2:
+    if len(termo.strip()) < 2 or not parece_ticker(termo):
         return []
     if get is None:
         import requests
-        get = lambda url, **kw: requests.get(url, timeout=8, **kw)  # noqa: E731
+        get = lambda url, **kw: requests.get(url, timeout=5, **kw)  # noqa: E731
     r = get(URL_BUSCA, params={"q": termo, "quotesCount": 12, "newsCount": 0, "listsCount": 0}, headers=CABECALHO)
     r.raise_for_status()
     out = []
@@ -63,11 +73,16 @@ def tickers(termo: str, limite: int = 6, get=None) -> list[dict]:
     return out[:limite]
 
 
-def fundos(consulta: Consulta, termo: str, limite: int = 6) -> list[dict]:
+def formatar_cnpj(cnpj: str) -> str:
+    c = SO_DIGITOS.sub("", cnpj)
+    return f"{c[:2]}.{c[2:5]}.{c[5:8]}/{c[8:12]}-{c[12:]}" if len(c) == 14 else cnpj
+
+
+def fundos(consulta: Consulta, termo: str, limite: int = 8) -> list[dict]:
     """Nome ou CNPJ. Fundo grande primeiro: com 36 mil classes no cadastro, o PL é o melhor desempate."""
     digitos = SO_DIGITOS.sub("", termo)
     if len(digitos) >= 4 and len(digitos) >= len(termo.strip()) - 4:
-        onde, param = "cnpj LIKE ?", [f"{digitos}%"]
+        onde, param = "cnpj LIKE ?", [f"{digitos}%"]  # inclui as subclasses do mesmo CNPJ
     elif len(termo.strip()) < 3:
         return []
     else:
@@ -76,15 +91,20 @@ def fundos(consulta: Consulta, termo: str, limite: int = 6) -> list[dict]:
             return []
         onde = " AND ".join(["upper(nome) LIKE ?"] * len(palavras))
         param = [f"%{p}%" for p in palavras]
-    df = consulta._df(f"SELECT cnpj, nome, gestor, classe, pl, situacao FROM fundos_cadastro WHERE {onde} "
-                      f"ORDER BY coalesce(pl, 0) DESC LIMIT {int(limite)}", param)
+    tem_sub = "subclasse" in consulta.colunas("fundos_cadastro")
+    col_sub = "coalesce(subclasse, '')" if tem_sub else "''"
+    df = consulta._df(f"SELECT cnpj, {col_sub} AS subclasse, nome, gestor, classe, pl, situacao "
+                      f"FROM fundos_cadastro WHERE {onde} ORDER BY coalesce(pl, 0) DESC, 2 LIMIT {int(limite)}", param)
     out = []
     for _, r in df.iterrows():
         pl = None if pd.isna(r["pl"]) else float(r["pl"])
-        detalhe = " · ".join(x for x in [r["gestor"] or None, r["classe"] or None,
+        sub = r["subclasse"] or ""
+        detalhe = " · ".join(x for x in [("subclasse" if sub else None), r["gestor"] or None, r["classe"] or None,
                                          f"PL R$ {pl / 1e6:,.0f} mi".replace(",", ".") if pl else None] if x)
-        out.append({"tipo": "fundo", "identificador": r["cnpj"], "ativo": r["nome"], "mercado": "CVM", "moeda": "BRL",
-                    "onde": "CVM", "detalhe": detalhe, "inativo": (r["situacao"] or "").upper() not in ("EM FUNCIONAMENTO NORMAL", "")})
+        out.append({"tipo": "fundo", "identificador": f"{r['cnpj']}:{sub}" if sub else r["cnpj"],
+                    "ativo": r["nome"], "mercado": "CVM", "moeda": "BRL", "onde": "CVM",
+                    "codigo": formatar_cnpj(r["cnpj"]) + (f" · {sub}" if sub else ""), "detalhe": detalhe,
+                    "inativo": (r["situacao"] or "").upper() not in ("EM FUNCIONAMENTO NORMAL", "")})
     return out
 
 
@@ -100,7 +120,8 @@ def tesouro(consulta: Consulta, termo: str, limite: int = 6) -> list[dict]:
     palavras = [p for p in t.replace("+", "+ ").split() if p]
     alvo = df[df["nome"].str.upper().apply(lambda n: all(p in n for p in palavras))]
     return [{"tipo": "tesouro", "identificador": r["nome"], "ativo": r["nome"], "mercado": "TD", "moeda": "BRL",
-             "onde": "Tesouro Direto", "detalhe": f"vence em {pd.Timestamp(r['vencimento']).date().isoformat()}"}
+             "onde": "Tesouro Direto", "codigo": pd.Timestamp(r["vencimento"]).strftime("%d/%m/%Y"),
+             "detalhe": f"vence em {pd.Timestamp(r['vencimento']).date().isoformat()}"}
             for _, r in alvo.head(limite).iterrows()]
 
 
@@ -124,6 +145,7 @@ def cota_cvm(dados_dir: str, cnpj: str, quando: date, get=None) -> dict:
     está lançando a posição agora.
     """
     from mesa.fontes.cvm import URL_INFORME, parse_informe
+    cnpj, sub = partes_fundo(cnpj)
     cnpj = SO_DIGITOS.sub("", cnpj)
     pasta = os.path.join(dados_dir, "cvm", "raw")
     os.makedirs(pasta, exist_ok=True)
@@ -142,7 +164,10 @@ def cota_cvm(dados_dir: str, cnpj: str, quando: date, get=None) -> dict:
         with zipfile.ZipFile(caminho) as zf:
             for nome in zf.namelist():
                 if nome.lower().endswith(".csv"):
-                    partes.append(parse_informe(zf.read(nome), {cnpj}))
+                    linhas = parse_informe(zf.read(nome), {cnpj})
+                    if not linhas.empty and "subclasse" in linhas.columns:
+                        linhas = linhas[linhas["subclasse"].fillna("") == sub]
+                    partes.append(linhas)
         df = pd.concat([x for x in partes if not x.empty], ignore_index=True) if any(not x.empty for x in partes) else pd.DataFrame()
         if not df.empty:
             ate = df[pd.to_datetime(df["data"]).dt.date <= quando].sort_values("data")
