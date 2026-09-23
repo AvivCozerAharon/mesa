@@ -5,177 +5,270 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>mesa</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;500;600&family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,400&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.2.0/dist/lightweight-charts.standalone.production.js"></script>
 <style>
+  /* mesa — caderno de teses. Papel frio, tinta escura, e a margem à esquerda de cada posição
+     carrega a marca do dia: ✓ de pé, ? revisar, — sem elementos. A marca é o único lugar com cor forte. */
   :root{
-    --fundo:#12151A; --painel:#191D24; --painel2:#1F242C; --linha:#2A3039; --texto:#E9E4D8; --apagado:#8C94A0;
-    --latao:#E9B44C; --alta:#57C48A; --baixa:#E36B5F; --info:#6FA8DC; --revisar:#E9B44C;
-    --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace; --sans:"IBM Plex Sans",system-ui,sans-serif;
+    --papel:#E6E8E3; --papel2:#DEE1DB; --cartao:#EFF1EC; --linha:#C4C9C0; --linha2:#D5D9D1;
+    --tinta:#16232A; --tinta2:#54646B; --tinta3:#7E8C90;
+    --alta:#2F6B4B; --baixa:#9E3B2E; --revisar:#96650F; --elo:#27405C;
+    --serif:"Fraunces",Georgia,serif; --sans:"Archivo",system-ui,-apple-system,sans-serif;
+    --r:2px;
   }
+  @media (prefers-color-scheme:dark){ :root{
+    --papel:#141A1C; --papel2:#1B2225; --cartao:#1E262A; --linha:#2E383C; --linha2:#262F33;
+    --tinta:#E4E7E1; --tinta2:#9BA8AC; --tinta3:#7A878B;
+    --alta:#6FB98D; --baixa:#E08272; --revisar:#DCA94A; --elo:#8FB6D8;
+  } }
   *{box-sizing:border-box}
-  html,body{margin:0;background:var(--fundo);color:var(--texto);font:13px/1.45 var(--mono)}
-  a{color:var(--info);text-decoration:none} a:hover{text-decoration:underline}
-  button,input,select,textarea{font:inherit;color:inherit}
-  button{background:transparent;border:1px solid var(--linha);border-radius:3px;padding:5px 10px;cursor:pointer}
-  button:hover{background:var(--painel2)} button.primario{border-color:var(--latao);color:var(--latao)}
-  button:focus-visible,input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--latao);outline-offset:1px}
-  input,select,textarea{background:var(--fundo);border:1px solid var(--linha);border-radius:3px;padding:6px 8px;width:100%}
-  textarea{font-family:var(--sans);min-height:64px;resize:vertical}
-  .num{font-variant-numeric:tabular-nums} .alta{color:var(--alta)} .baixa{color:var(--baixa)} .apagado{color:var(--apagado)}
-  .prosa{font-family:var(--sans);font-size:14px;line-height:1.5}
+  html,body{margin:0;background:var(--papel);color:var(--tinta);font:15px/1.5 var(--sans);-webkit-font-smoothing:antialiased}
+  a{color:var(--elo)} a:hover{text-decoration-thickness:2px}
+  h1,h2,h3{margin:0;font-weight:400}
+  .num{font-variant-numeric:tabular-nums;letter-spacing:-.01em}
+  .alta{color:var(--alta)} .baixa{color:var(--baixa)} .fraco{color:var(--tinta2)}
+  .prosa{font-family:var(--serif);font-size:16px;line-height:1.62;max-width:64ch}
+  .prosa p{margin:0 0 .6em}
 
-  /* topo */
-  header{display:flex;align-items:center;gap:18px;padding:10px 16px;border-bottom:1px solid var(--linha);background:var(--painel)}
-  header h1{font-size:15px;font-weight:600;margin:0;letter-spacing:.02em} header h1 b{color:var(--latao);font-weight:600}
-  .macro{display:flex;gap:18px;overflow-x:auto;flex:1;white-space:nowrap;scrollbar-width:none}
-  .macro div{display:flex;flex-direction:column;line-height:1.2}
-  .macro .l{color:var(--apagado);font-size:11px} .macro .v{font-weight:500}
-  .idade{color:var(--apagado);font-size:11px}
-  #relogio{color:var(--apagado);font-size:12px}
+  button,input,select,textarea{font:inherit;color:inherit;font-family:var(--sans)}
+  button{background:var(--cartao);border:1px solid var(--linha);border-radius:var(--r);padding:6px 12px;cursor:pointer;font-size:14px}
+  button:hover{border-color:var(--tinta2)}
+  button.forte{background:var(--tinta);color:var(--papel);border-color:var(--tinta)}
+  button.forte:hover{background:var(--elo);border-color:var(--elo)}
+  button.leve{background:none;border-color:transparent;color:var(--tinta2);padding:4px 6px}
+  button.leve:hover{color:var(--baixa)}
+  :focus-visible{outline:2px solid var(--elo);outline-offset:2px}
+  input,select,textarea{background:var(--cartao);border:1px solid var(--linha);border-radius:var(--r);padding:7px 9px;width:100%}
+  textarea{min-height:66px;resize:vertical;line-height:1.5}
+  label.campo{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--tinta2)}
 
-  /* grade */
-  main{display:grid;grid-template-columns:320px minmax(0,1fr) 360px;height:calc(100vh - 47px)}
-  aside,section{overflow-y:auto;min-width:0}
-  aside{background:var(--painel);border-right:1px solid var(--linha)} aside.dir{border-right:0;border-left:1px solid var(--linha)}
-  .bloco{padding:14px 16px;border-bottom:1px solid var(--linha)}
-  .bloco h2{font-size:12px;font-weight:600;color:var(--apagado);margin:0 0 10px;letter-spacing:.01em}
-  .bloco h2 span{float:right;font-weight:400}
+  /* cabeçalho e fita macro */
+  .topo{display:flex;align-items:center;gap:20px;padding:9px 18px;border-bottom:1px solid var(--linha);background:var(--papel2)}
+  .marca{font-family:var(--serif);font-size:23px;line-height:1;font-weight:600;letter-spacing:-.02em}
+  .fita{display:flex;gap:20px;overflow-x:auto;flex:1;white-space:nowrap;scrollbar-width:none;align-items:baseline}
+  .fita::-webkit-scrollbar{display:none}
+  .fita b{font-weight:500;font-size:14px} .fita span{color:var(--tinta2);font-size:13px}
+  #relogio{color:var(--tinta2);font-size:13px;font-variant-numeric:tabular-nums}
 
-  /* carteira */
-  .resumo{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px}
-  .resumo .v{font-size:20px;font-weight:500;line-height:1.1} .resumo .l{color:var(--apagado);font-size:11px}
-  table.pos{width:100%;border-collapse:collapse}
-  table.pos{table-layout:fixed} table.pos td{padding:7px 3px;border-top:1px solid var(--linha);vertical-align:middle;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  #posicoes td:first-child{width:46%} #posicoes td:nth-child(2){width:26%}
-  table.pos tr{cursor:pointer} table.pos tr:hover td{background:var(--painel2)} table.pos tr.sel td{background:#242B36}
-  table.pos tr.sel td:first-child{box-shadow:inset 3px 0 0 var(--latao)}
-  table.pos .ativo{font-weight:500} table.pos .tipo{color:var(--apagado);font-size:11px;display:block}
-  table.pos td.r{text-align:right}
-  .marca{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:8px;vertical-align:-1px;border:1.5px solid var(--apagado)}
-  .marca.sim{background:var(--alta);border-color:var(--alta)} .marca.revisar{background:var(--revisar);border-color:var(--revisar)}
-  .marca.nao_avaliavel{background:transparent} .marca.erro{border-color:var(--baixa);border-style:dashed}
-  .exposicao{display:flex;height:8px;border-radius:2px;overflow:hidden;margin-top:10px;background:#2A3039}
-  .exposicao i{display:block;height:100%}
-  .leg{display:flex;flex-wrap:wrap;gap:4px 12px;margin-top:6px;font-size:11px;color:var(--apagado)}
-  .leg i{display:inline-block;width:8px;height:8px;border-radius:2px;margin-right:5px;vertical-align:-1px}
+  main{display:grid;grid-template-columns:300px minmax(0,1fr) 340px;height:calc(100vh - 44px)}
+  .painel{overflow-y:auto;min-width:0}
+  .esq{background:var(--papel2);border-right:1px solid var(--linha)}
+  .dir{background:var(--papel2);border-left:1px solid var(--linha)}
+  .bloco{padding:16px 18px;border-bottom:1px solid var(--linha2)}
+  .bloco:last-child{border-bottom:0}
+  .rotulo{font-size:12px;color:var(--tinta3);display:flex;justify-content:space-between;align-items:baseline;gap:10px;margin-bottom:10px}
+  .rotulo b{font-weight:500;color:var(--tinta2);font-size:13px}
 
-  /* ativo */
-  .cab{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
-  .cab h2{font-size:22px;font-weight:600;margin:0;color:var(--texto)}
-  .cab .preco{font-size:22px} .cab .meta{color:var(--apagado)}
-  #grafico{height:300px;margin-top:10px;border:1px solid var(--linha);border-radius:3px}
-  .metricas{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:10px 16px}
-  .metricas .l{color:var(--apagado);font-size:11px} .metricas .v{font-size:15px;font-weight:500}
-  .tese-box{border-left:3px solid var(--latao);padding:8px 12px;background:var(--painel);margin-top:6px}
-  .tese-box .veredito{font-weight:600} .veredito.sim{color:var(--alta)} .veredito.revisar{color:var(--revisar)} .veredito.nao_avaliavel{color:var(--apagado)}
-  ul.lista{list-style:none;margin:0;padding:0} ul.lista li{padding:6px 0;border-top:1px solid var(--linha)}
-  ul.lista li:first-child{border-top:0} ul.lista .meta{color:var(--apagado);font-size:11px}
-  .form{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px;margin-top:8px}
-  .form label{display:flex;flex-direction:column;gap:3px;color:var(--apagado);font-size:11px}
-  .form .largo{grid-column:1/-1} .acoes{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
-  .vazio{color:var(--apagado);padding:30px 0;text-align:center}
-  .gat{display:flex;justify-content:space-between;gap:8px;align-items:center}
-  .gat button{padding:2px 7px;font-size:11px}
+  /* carteira: o número grande é o dinheiro, o resto é contexto */
+  .dinheiro{font-size:31px;line-height:1.05;font-weight:500}
+  .sob{font-size:15px;margin-top:3px}
+  .faixa{display:flex;height:6px;margin-top:14px;background:var(--linha2);border-radius:var(--r);overflow:hidden}
+  .faixa i{display:block}
+  .chaves{display:flex;flex-wrap:wrap;gap:3px 14px;margin-top:7px;font-size:12px;color:var(--tinta2)}
+  .chaves i{display:inline-block;width:8px;height:8px;margin-right:5px}
 
-  /* hoje */
-  .disparo{border-left:3px solid var(--revisar);padding:6px 10px;margin:6px 0;background:var(--painel2)}
-  .disparo .meta{color:var(--apagado);font-size:11px}
-  .op{display:grid;grid-template-columns:1fr auto;gap:2px 8px;font-size:11px}
-  .op .ok{color:var(--alta)} .op .erro{color:var(--baixa)}
+  /* razão: a lista de posições, com a marca do veredito na margem */
+  .razao{list-style:none;margin:0;padding:0}
+  .razao li{display:grid;grid-template-columns:16px 1fr auto;gap:0 9px;align-items:baseline;
+            padding:8px 4px 8px 0;border-top:1px solid var(--linha2);cursor:pointer;position:relative}
+  .razao li:first-child{border-top:0}
+  .razao li:hover{background:var(--cartao)}
+  .razao li[aria-current="true"]{background:var(--cartao);box-shadow:-18px 0 0 var(--cartao),inset 2px 0 0 var(--tinta)}
+  .sinal{font-family:var(--serif);font-size:15px;text-align:center;line-height:1}
+  .sinal.sim{color:var(--alta)} .sinal.revisar{color:var(--revisar)} .sinal.nao_avaliavel,.sinal.erro{color:var(--tinta3)}
+  .razao .nome{font-weight:500;font-size:14px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .razao .sub{grid-column:2;font-size:12px;color:var(--tinta2);margin-top:1px}
+  .razao .var{text-align:right;font-size:14px;font-weight:500}
+  .razao .peso{grid-column:3;text-align:right;font-size:12px;color:var(--tinta3)}
+  .razao .apagar{position:absolute;right:0;top:50%;transform:translateY(-50%);font-size:18px;line-height:1;padding:1px 6px;
+                 opacity:0;background:var(--cartao);border:1px solid var(--linha)}
+  .razao li:hover .apagar,.razao .apagar:focus-visible{opacity:1}
 
-  /* login / modal */
-  .veu{position:fixed;inset:0;background:rgba(18,21,26,.86);display:none;align-items:center;justify-content:center;z-index:9}
-  .veu.aberto{display:flex} .caixa{background:var(--painel);border:1px solid var(--linha);border-radius:4px;padding:20px;width:min(520px,92vw);max-height:90vh;overflow:auto}
-  .caixa h2{margin:0 0 10px;font-size:15px}
-  .aviso{color:var(--baixa);font-size:12px;margin-top:6px;min-height:16px}
-  kbd{border:1px solid var(--linha);border-radius:3px;padding:0 4px;font-size:11px;color:var(--apagado)}
+  /* página do ativo */
+  .titulo{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap}
+  .titulo h2{font-family:var(--serif);font-size:30px;letter-spacing:-.02em;line-height:1.1}
+  .titulo .preco{font-size:24px;font-weight:500}
+  .linhafina{color:var(--tinta2);font-size:13px;margin-top:6px}
+  #grafico{height:290px;margin-top:2px;border:1px solid var(--linha2);background:var(--cartao)}
+  .grade{display:grid;grid-template-columns:repeat(auto-fill,minmax(146px,1fr));gap:12px 18px}
+  .grade .l{font-size:12px;color:var(--tinta3)} .grade .v{font-size:17px;font-weight:500;margin-top:1px}
+  .grade .v small{font-size:12px;font-weight:400;color:var(--tinta2)}
 
-  @media (max-width:1100px){ main{grid-template-columns:280px minmax(0,1fr)} aside.dir{grid-column:1/-1;border-left:0;border-top:1px solid var(--linha)} main{height:auto} }
-  @media (max-width:760px){ main{grid-template-columns:1fr} aside{border-right:0;border-bottom:1px solid var(--linha)} header{flex-wrap:wrap} #grafico{height:220px} }
-  @media (prefers-reduced-motion:no-preference){ table.pos tr td{transition:background .15s} }
+  /* tese: bloco de manuscrito com a marca na margem */
+  .tese{display:grid;grid-template-columns:18px 1fr;gap:12px;border-left:2px solid var(--linha);padding:2px 0 2px 12px}
+  .tese .sinal{font-size:18px;padding-top:2px}
+  .tese .veredito{font-family:var(--serif);font-size:18px;margin-bottom:4px}
+  .veredito.sim{color:var(--alta)} .veredito.revisar{color:var(--revisar)} .veredito.nao_avaliavel{color:var(--tinta2)}
+  .assinatura{font-size:12px;color:var(--tinta3);margin-top:8px}
+  .citar{font-family:var(--serif);font-style:italic;color:var(--tinta2);border-left:2px solid var(--linha);padding-left:10px;margin:0 0 10px}
+
+  ul.itens{list-style:none;margin:0;padding:0}
+  ul.itens li{padding:8px 0;border-top:1px solid var(--linha2)}
+  ul.itens li:first-child{border-top:0}
+  ul.itens .meta{color:var(--tinta3);font-size:12px;margin-top:2px}
+  table.dados{width:100%;border-collapse:collapse;font-size:14px}
+  table.dados td,table.dados th{padding:6px 4px;border-top:1px solid var(--linha2);text-align:right;font-weight:400}
+  table.dados th{color:var(--tinta3);font-size:12px;border-top:0} table.dados td:first-child,table.dados th:first-child{text-align:left}
+  .form{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:6px}
+  .form .largo{grid-column:1/-1}
+  .acoes{display:flex;gap:10px;margin-top:14px;flex-wrap:wrap;align-items:center}
+  .vazio{color:var(--tinta2);font-family:var(--serif);font-size:17px;padding:44px 0;max-width:46ch}
+  .aviso{color:var(--baixa);font-size:13px} .ok{color:var(--alta);font-size:13px}
+  .disparo{border-left:2px solid var(--revisar);padding:6px 0 6px 10px;margin:9px 0}
+  .disparo .meta{color:var(--tinta3);font-size:12px}
+  .op{display:grid;grid-template-columns:1fr auto;gap:3px 10px;font-size:12px;color:var(--tinta2)}
+  .op .e{color:var(--baixa)}
+  .chip{display:inline-block;border:1px solid var(--linha);background:var(--cartao);padding:1px 8px;margin:2px 5px 2px 0;font-size:13px}
+
+  /* busca de ativo */
+  .combo{position:relative}
+  .sugestoes{position:absolute;z-index:3;left:0;right:0;top:calc(100% + 3px);background:var(--cartao);border:1px solid var(--tinta2);
+             max-height:290px;overflow-y:auto;list-style:none;margin:0;padding:0;box-shadow:0 6px 18px rgba(0,0,0,.18)}
+  .sugestoes:empty{display:none}
+  .sugestoes li{padding:7px 10px;cursor:pointer;display:grid;grid-template-columns:1fr auto;gap:2px 10px}
+  .sugestoes li[aria-selected="true"]{background:var(--papel2)}
+  .sugestoes .cod{font-weight:600;font-size:14px}
+  .sugestoes .onde{font-size:12px;color:var(--tinta2);text-align:right}
+  .sugestoes .desc{grid-column:1/-1;font-size:12px;color:var(--tinta2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+  .veu{position:fixed;inset:0;background:rgba(10,16,18,.55);display:none;align-items:flex-start;justify-content:center;z-index:9;padding:7vh 16px}
+  .veu.aberto{display:flex}
+  .caixa{background:var(--papel);border:1px solid var(--linha);padding:22px;width:min(560px,96vw);max-height:86vh;overflow:auto}
+  .caixa h2{font-family:var(--serif);font-size:22px;margin-bottom:4px}
+  kbd{border:1px solid var(--linha);padding:0 4px;font-size:11px;color:var(--tinta3);font-family:var(--sans)}
+
+  @media (max-width:1180px){ main{grid-template-columns:280px minmax(0,1fr);height:auto}
+    .dir{grid-column:1/-1;border-left:0;border-top:1px solid var(--linha)} }
+  @media (max-width:780px){ main{grid-template-columns:1fr}
+    .esq{border-right:0;border-bottom:1px solid var(--linha)} .topo{flex-wrap:wrap;gap:10px} #grafico{height:210px}
+    .form{grid-template-columns:1fr} }
+  @media (prefers-reduced-motion:no-preference){ .razao li{transition:background .12s} }
 </style>
 </head>
 <body>
-<header>
-  <h1><b>mesa</b></h1>
-  <div class="macro" id="macro"></div>
+<div class="topo">
+  <h1 class="marca">mesa</h1>
+  <div class="fita" id="fita"></div>
   <span id="relogio"></span>
-</header>
+</div>
 
 <main>
-  <aside class="esq">
+  <div class="painel esq">
     <div class="bloco">
-      <h2>Carteira <span id="cartData"></span></h2>
-      <div class="resumo">
-        <div><div class="v num" id="rTotal">–</div><div class="l">valor em R$</div></div>
-        <div><div class="v num" id="rPnl">–</div><div class="l">resultado</div></div>
+      <div class="rotulo"><span>Carteira</span><span id="cartData"></span></div>
+      <div class="dinheiro num" id="rTotal">–</div>
+      <div class="sob num" id="rPnl"></div>
+      <div class="faixa" id="faixa"></div><div class="chaves" id="chaves"></div>
+    </div>
+    <div class="bloco">
+      <div class="rotulo"><b>Posições</b><button id="btnNova" style="padding:3px 9px;font-size:13px">Lançar posição</button></div>
+      <ul class="razao" id="posicoes"></ul>
+      <div class="chaves" style="margin-top:12px">
+        <span><span class="sinal sim">✓</span> tese de pé</span><span><span class="sinal revisar">?</span> revisar</span>
+        <span><span class="sinal nao_avaliavel">—</span> sem elementos</span><span><kbd>j</kbd> <kbd>k</kbd> navega</span>
       </div>
-      <div class="exposicao" id="expo"></div><div class="leg" id="expoLeg"></div>
     </div>
-    <div class="bloco">
-      <h2>Posições <span><button id="btnNova" class="primario" style="padding:2px 8px;font-size:11px">+ posição</button></span></h2>
-      <table class="pos"><tbody id="posicoes"></tbody></table>
-      <div class="apagado" style="font-size:11px;margin-top:8px">● tese de pé &nbsp;● revisar &nbsp;○ sem novidade &nbsp;· <kbd>j</kbd><kbd>k</kbd> navega</div>
-    </div>
-  </aside>
+  </div>
 
-  <section id="centro">
-    <div class="bloco" id="ativoCab"><div class="vazio">Selecione uma posição.</div></div>
+  <div class="painel" id="centro">
+    <div class="bloco" id="ativoCab">
+      <p class="vazio">Escolha uma posição à esquerda para ver o preço, os números, a sua tese e o que a IA achou dela hoje.</p>
+    </div>
     <div class="bloco" id="ativoGrafico" hidden><div id="grafico"></div></div>
-    <div class="bloco" id="ativoMetricas" hidden><h2>Números <span id="metData"></span></h2><div class="metricas" id="metricas"></div></div>
-    <div class="bloco" id="ativoFund" hidden><h2>Fundamentos <span id="fundData"></span></h2><div class="metricas" id="fundamentos"></div>
-      <table class="pos" id="trimestres" style="margin-top:10px"></table></div>
-    <div class="bloco" id="ativoTese" hidden><h2>Tese</h2><div id="teseVeredito"></div>
-      <textarea id="teseTxt" placeholder="Por que você tem essa posição? Em 2 linhas. A IA checa isso contra os fatos e notícias."></textarea>
-      <div class="acoes"><button id="btnTese" class="primario">Salvar nova versão da tese</button><span class="apagado" id="teseHist"></span></div></div>
-    <div class="bloco" id="ativoNoticias" hidden><h2>Notícias dos últimos 7 dias <span id="notN"></span></h2><ul class="lista" id="noticias"></ul></div>
-    <div class="bloco" id="ativoGatilhos" hidden><h2>Gatilhos desta posição</h2><ul class="lista" id="gatilhos"></ul>
-      <div class="form"><label>regra<select id="gRegra"></select></label><label>parâmetros (JSON)<input id="gParams" value="{}"></label></div>
+    <div class="bloco" id="ativoMetricas" hidden><div class="rotulo"><b>Números</b><span id="metData"></span></div><div class="grade" id="metricas"></div></div>
+    <div class="bloco" id="ativoFund" hidden><div class="rotulo"><b>Fundamentos</b><span id="fundData"></span></div>
+      <div class="grade" id="fundamentos"></div><table class="dados" id="trimestres" style="margin-top:14px"></table></div>
+    <div class="bloco" id="ativoTese" hidden>
+      <div class="rotulo"><b>Tese</b><span id="teseHist"></span></div>
+      <div id="teseVeredito"></div>
+      <textarea id="teseTxt" placeholder="Por que você tem essa posição, e o que faria você sair. Duas linhas bastam — é isso que a IA confere todo dia contra os fatos."></textarea>
+      <div class="acoes"><button id="btnTese" class="forte">Salvar nova versão</button></div>
+    </div>
+    <div class="bloco" id="ativoNoticias" hidden><div class="rotulo"><b>Notícias dos últimos 7 dias</b><span id="notN"></span></div><ul class="itens" id="noticias"></ul></div>
+    <div class="bloco" id="ativoGatilhos" hidden><div class="rotulo"><b>Gatilhos desta posição</b></div><ul class="itens" id="gatilhos"></ul>
+      <div class="form" style="margin-top:12px"><label class="campo">regra<select id="gRegra"></select></label>
+        <label class="campo">parâmetros<input id="gParams" value="{}"></label></div>
       <div class="acoes"><button id="btnGat">Adicionar gatilho</button></div></div>
-    <div class="bloco" id="ativoEditar" hidden><h2>Editar posição</h2>
-      <div class="form">
-        <label>quantidade<input id="eQtd" type="number" step="any"></label><label>preço médio<input id="ePm" type="number" step="any"></label>
-        <label>data da compra<input id="eData" type="date"></label><label>termos de notícia (separe por ;)<input id="eBusca"></label>
-        <label class="largo">o que ele compra (mandato)<textarea id="eMandato"></textarea></label>
+    <div class="bloco" id="ativoCompras" hidden><div class="rotulo"><b>Compras</b><span id="comprasResumo"></span></div>
+      <table class="dados" id="compras"></table>
+      <div class="form" style="margin-top:12px">
+        <label class="campo">data<input id="cData" type="date"></label>
+        <label class="campo">quanto você pôs (R$)<input id="cValor" type="number" step="any" inputmode="decimal" placeholder="ex.: 2000"></label>
+        <label class="campo">quantidade<input id="cQtd" type="number" step="any" inputmode="decimal"></label>
+        <label class="campo">preço pago<input id="cPreco" type="number" step="any" inputmode="decimal"></label>
       </div>
-      <div class="acoes"><button id="btnSalvar" class="primario">Salvar</button><button id="btnTermos">Gerar termos de notícia com a IA</button><button id="btnExcluir">Excluir posição</button><span class="aviso" id="eAviso"></span></div></div>
-  </section>
+      <div class="acoes"><button id="btnCompra" class="forte">Adicionar compra</button><span id="cAviso"></span></div></div>
+    <div class="bloco" id="ativoEditar" hidden><div class="rotulo"><b>Editar posição</b></div>
+      <div class="form">
+        <label class="campo">termos de notícia (separados por ;)<input id="eBusca"></label>
+        <label class="campo">quantidade e preço médio<input id="eResumo" disabled></label>
+        <label class="campo largo">o que ele compra<textarea id="eMandato" placeholder="Para fundos: o mandato, em uma frase. A IA transforma isso nos termos de busca de notícia."></textarea></label>
+      </div>
+      <div class="acoes"><button id="btnSalvar" class="forte">Salvar</button><button id="btnTermos">Gerar termos com a IA</button>
+        <button id="btnExcluir" class="leve">Apagar posição</button><span id="eAviso"></span></div></div>
+  </div>
 
-  <aside class="dir">
-    <div class="bloco"><h2>Hoje <span id="brData"></span></h2><div class="prosa" id="brCarteira"><span class="apagado">Sem briefing ainda.</span></div>
-      <div id="olhar" style="margin-top:8px"></div></div>
-    <div class="bloco"><h2>Gatilhos disparados <span id="dispN"></span></h2><div id="disparos"><span class="apagado">Nenhum pendente.</span></div></div>
-    <div class="bloco"><h2>Teses hoje</h2><ul class="lista" id="brPos"></ul></div>
-    <div class="bloco"><h2>Operação <span id="opCusto"></span></h2><div class="op" id="operacao"></div>
-      <div class="acoes"><button id="btnJobFech">Atualizar preços</button><button id="btnJobBrief">Gerar briefing</button><span class="apagado" id="jobStatus"></span></div></div>
-  </aside>
+  <div class="painel dir">
+    <div class="bloco"><div class="rotulo"><b>Hoje</b><span id="brData"></span></div>
+      <div class="prosa" id="brCarteira"><p class="fraco">O briefing sai às 7h. Você também pode gerar agora, ali embaixo.</p></div>
+      <div id="olhar" style="margin-top:10px"></div></div>
+    <div class="bloco"><div class="rotulo"><b>Gatilhos disparados</b><span id="dispN"></span></div>
+      <div id="disparos"><span class="fraco" style="font-size:13px">Nada disparou.</span></div></div>
+    <div class="bloco"><div class="rotulo"><b>Teses de hoje</b></div><ul class="itens" id="brPos"></ul></div>
+    <div class="bloco"><div class="rotulo"><b>Operação</b><span id="opCusto"></span></div><div class="op" id="operacao"></div>
+      <div class="acoes"><button id="btnJobFech">Atualizar preços</button><button id="btnJobBrief">Gerar briefing</button>
+        <span class="fraco" style="font-size:13px" id="jobStatus"></span></div></div>
+  </div>
 </main>
 
-<div class="veu" id="login"><div class="caixa"><h2>mesa</h2><p class="prosa apagado">Sua carteira. Senha definida em MESA_SENHA.</p>
-  <input id="senha" type="password" placeholder="senha" autocomplete="current-password"><div class="aviso" id="loginAviso"></div>
-  <div class="acoes"><button id="btnLogin" class="primario">Entrar</button></div></div></div>
+<div class="veu" id="login"><div class="caixa"><h2>mesa</h2>
+  <p class="prosa fraco">Sua carteira, suas teses. A senha é a que está em MESA_SENHA.</p>
+  <input id="senha" type="password" placeholder="senha" autocomplete="current-password">
+  <div class="aviso" id="loginAviso"></div>
+  <div class="acoes"><button id="btnLogin" class="forte">Entrar</button></div></div></div>
 
-<div class="veu" id="nova"><div class="caixa"><h2>Nova posição</h2>
-  <div class="form">
-    <label>tipo<select id="nTipo"><option value="acao">ação B3</option><option value="fii">FII</option><option value="etf">ETF B3</option><option value="bdr">BDR</option><option value="acao_us">ação EUA</option><option value="etf_us">ETF EUA</option><option value="fundo">fundo (CNPJ)</option><option value="tesouro">Tesouro Direto</option></select></label>
-    <label>identificador<input id="nId" placeholder="PETR4 · AAPL · 22.215.116/0001-80 · Tesouro IPCA+ 2035"></label>
-    <label>nome (opcional)<input id="nNome"></label><label>quantidade<input id="nQtd" type="number" step="any"></label>
-    <label>preço médio<input id="nPm" type="number" step="any"></label><label>data da compra<input id="nData" type="date"></label>
-    <label class="largo">o que ele compra (mandato — a IA extrai os termos de notícia daqui)<textarea id="nMandato" placeholder="ex.: debêntures incentivadas de infraestrutura e crédito privado high grade, meta CDI+2%"></textarea></label>
-    <label class="largo">termos de notícia (separe por ;) — deixe vazio para a IA gerar do mandato<input id="nBusca" placeholder="PETR4;Petrobras"></label>
-    <label class="largo">tese<textarea id="nTese"></textarea></label>
-  </div><div class="aviso" id="nAviso"></div>
-  <div class="acoes"><button id="btnCriar" class="primario">Adicionar</button><button id="btnCancelar">Cancelar</button></div></div></div>
+<div class="veu" id="nova"><div class="caixa"><h2>Lançar posição</h2>
+  <p class="prosa fraco" style="font-size:14px">Procure pelo nome — ação, FII, ETF, BDR, fundo por CNPJ ou nome, título do Tesouro.</p>
+  <label class="campo combo" style="margin-top:12px">o que você comprou
+    <input id="nBusca" autocomplete="off" role="combobox" aria-expanded="false" aria-controls="nLista" placeholder="petrobras · HGLG11 · verde 30 · tesouro ipca">
+    <ul class="sugestoes" id="nLista" role="listbox"></ul>
+  </label>
+  <div id="nEscolhido" style="margin-top:12px" hidden>
+    <div style="display:flex;align-items:baseline;gap:10px;flex-wrap:wrap">
+      <b id="nCod" style="font-size:17px"></b><span class="fraco" id="nNome" style="font-size:14px"></span>
+      <button class="leve" id="nTrocar" style="margin-left:auto">trocar</button>
+    </div>
+    <div class="form" style="margin-top:10px">
+      <label class="campo">data da compra<input id="nData" type="date"></label>
+      <label class="campo">quanto você pôs (R$)<input id="nValor" type="number" step="any" inputmode="decimal" placeholder="ex.: 5000"></label>
+      <div class="campo largo" id="nCalc" hidden></div>
+      <label class="campo">quantidade<input id="nQtd" type="number" step="any" inputmode="decimal"></label>
+      <label class="campo">preço médio pago<input id="nPm" type="number" step="any" inputmode="decimal"></label>
+      <div class="campo largo"><span class="fraco" id="nPreco" style="font-size:12px"></span></div>
+      <div class="campo largo"><button id="btnMaisCompra" type="button">Guardar esta compra e lançar outra</button></div>
+      <div class="campo largo" id="nLista2" hidden></div>
+      <label class="campo">termos de notícia<input id="nTermos" placeholder="deixe vazio: usamos o código e o nome"></label>
+      <label class="campo largo" id="nMandatoBox" hidden>o que ele compra<textarea id="nMandato" placeholder="ex.: debêntures incentivadas de infraestrutura e CRI, meta CDI+2%"></textarea></label>
+      <label class="campo largo">tese — por que você comprou<textarea id="nTese"></textarea></label>
+    </div>
+  </div>
+  <div class="aviso" id="nAviso" style="margin-top:8px"></div>
+  <div class="acoes"><button id="btnCriar" class="forte">Adicionar à carteira</button><button id="btnCancelar">Cancelar</button></div>
+</div></div>
 
 <script>
 const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const fmt = (v, d=2) => v == null || Number.isNaN(v) ? '–' : v.toLocaleString('pt-BR', {minimumFractionDigits:d, maximumFractionDigits:d});
 const pct = v => v == null ? '–' : (v > 0 ? '+' : '') + fmt(v, 1) + '%';
 const cls = v => v == null ? '' : v > 0 ? 'alta' : v < 0 ? 'baixa' : '';
+const SINAL = {sim:'✓', revisar:'?', nao_avaliavel:'—', erro:'·'};
 const TIPO = {acao:'ação', fii:'FII', etf:'ETF', bdr:'BDR', acao_us:'ação EUA', etf_us:'ETF EUA', fundo:'fundo', tesouro:'Tesouro'};
-const CORES = {acao:'#E9B44C', fii:'#B08968', etf:'#C9A227', bdr:'#D4A05A', acao_us:'#6FA8DC', etf_us:'#4F86B8', fundo:'#9C86C9', tesouro:'#57C48A'};
-let carteira = null, sel = null, grafico = null, serieG = null, regras = {};
+const CORES = {acao:'#2F6B4B', fii:'#7A5C3E', etf:'#4A7C59', bdr:'#96650F', acao_us:'#27405C', etf_us:'#51749B', fundo:'#6B4E71', tesouro:'#8A8F7D'};
+const css = n => getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+let carteira = null, sel = null, grafico = null, serieG = null, briefingHoje = null;
 
 async function api(caminho, opts={}) {
   const r = await fetch(caminho, {headers:{'content-type':'application/json'}, ...opts});
@@ -186,155 +279,423 @@ async function api(caminho, opts={}) {
 }
 $('btnLogin').onclick = async () => {
   try { await api('/login', {method:'POST', body:JSON.stringify({senha:$('senha').value})}); $('login').classList.remove('aberto'); tudo(); }
-  catch (e) { $('loginAviso').textContent = e.message; }
+  catch (e) { $('loginAviso').textContent = e.message === 'login' ? 'Senha incorreta.' : e.message; }
 };
 $('senha').addEventListener('keydown', e => { if (e.key === 'Enter') $('btnLogin').click(); });
 
-// ---- macro ----
+// ---- fita macro ----
 async function macro() {
-  const m = await api('/macro'); const b = m.benchmarks; const rot = {IBOV:'Ibovespa', SP500:'S&P 500', NASDAQ:'Nasdaq', IFIX:'IFIX', USDBRL:'USD/BRL', CDI:'CDI (índice)'};
+  const m = await api('/macro'), b = m.benchmarks;
+  const rot = {IBOV:'Ibovespa', SP500:'S&P 500', NASDAQ:'Nasdaq', IFIX:'IFIX', USDBRL:'dólar'};
   let html = '';
   for (const k of ['IBOV','SP500','NASDAQ','USDBRL','IFIX']) { const x = b[k]; if (!x) continue;
-    html += `<div><span class="l">${rot[k]} <span class="idade">${x.data.slice(5)}</span></span><span class="v num">${fmt(x.ultimo, k==='USDBRL'?3:0)} <span class="${cls(x.var_1d)}">${pct(x.var_1d)}</span></span></div>`; }
+    html += `<div><span>${rot[k]}</span> <b class="num">${fmt(x.ultimo, k==='USDBRL'?3:0)}</b> <b class="num ${cls(x.var_1d)}">${pct(x.var_1d)}</b></div>`; }
   for (const [pais, c] of Object.entries(m.curvas || {})) {
-    const p10 = (c.pontos||[]).find(p => /10 Yr|2035/.test(p.titulo + ' ' + p.vencimento)) || (c.pontos||[])[Math.floor((c.pontos||[]).length/2)];
-    if (p10) html += `<div><span class="l">juros ${pais} ${p10.titulo.replace('Tesouro ','')} <span class="idade">${c.data.slice(5)}</span></span><span class="v num">${fmt(p10.taxa,2)}%</span></div>`; }
-  $('macro').innerHTML = html;
+    const pts = c.pontos || [], p = pts.find(p => /10 Yr|2035/.test(p.titulo + ' ' + p.vencimento)) || pts[Math.floor(pts.length/2)];
+    if (p) html += `<div><span>juros ${pais}</span> <b class="num">${fmt(p.taxa,2)}%</b> <span>${esc(p.titulo.replace('Tesouro ',''))}</span></div>`; }
+  $('fita').innerHTML = html;
 }
 
 // ---- carteira ----
-function marca(p) { const t = p.tese_hoje; return `<span class="marca ${t||''}" title="${t||'sem briefing'}"></span>`; }
 async function carregarCarteira(aoVivo=false) {
   carteira = await api('/carteira' + (aoVivo ? '?ao_vivo=1' : ''));
-  const r = carteira.resumo; $('cartData').textContent = carteira.hoje;
-  $('rTotal').textContent = fmt(r.valor_brl, 0); $('rPnl').innerHTML = `<span class="${cls(r.pnl_brl)}">${r.pnl_brl>0?'+':''}${fmt(r.pnl_brl,0)}</span> <span class="apagado" style="font-size:12px">${pct(r.custo_brl ? r.pnl_brl/r.custo_brl*100 : null)}</span>`;
+  const r = carteira.resumo;
+  $('cartData').textContent = carteira.hoje;
+  $('rTotal').textContent = 'R$ ' + fmt(r.valor_brl, 0);
+  $('rPnl').innerHTML = `<span class="${cls(r.pnl_brl)}">${r.pnl_brl>0?'+':''}${fmt(r.pnl_brl,0)}</span>
+    <span class="fraco">sobre ${fmt(r.custo_brl,0)} que você pôs · ${pct(r.custo_brl ? r.pnl_brl/r.custo_brl*100 : null)}</span>`;
   const tot = Object.values(r.por_tipo).reduce((a,b)=>a+b,0) || 1;
-  $('expo').innerHTML = Object.entries(r.por_tipo).map(([t,v]) => `<i style="width:${v/tot*100}%;background:${CORES[t]}" title="${TIPO[t]} ${fmt(v/tot*100,0)}%"></i>`).join('');
-  $('expoLeg').innerHTML = Object.entries(r.por_tipo).map(([t,v]) => `<span><i style="background:${CORES[t]}"></i>${TIPO[t]} ${fmt(v/tot*100,0)}%</span>`).join('') + (r.sem_preco.length ? `<span class="baixa">sem preço: ${r.sem_preco.join(', ')}</span>` : '');
-  const br = await api('/briefing').catch(() => null);
-  const teses = {}; (br?.posicoes||[]).forEach(p => teses[p.posicao_id] = p.saida ? p.saida.tese_continua : 'erro');
+  $('faixa').innerHTML = Object.entries(r.por_tipo).map(([t,v]) => `<i style="width:${v/tot*100}%;background:${CORES[t]}"></i>`).join('');
+  $('chaves').innerHTML = Object.entries(r.por_tipo).sort((a,b)=>b[1]-a[1]).map(([t,v]) =>
+    `<span><i style="background:${CORES[t]}"></i>${TIPO[t]} ${fmt(v/tot*100,0)}%</span>`).join('')
+    + (r.sem_preco.length ? `<span class="baixa">sem preço: ${esc(r.sem_preco.join(', '))}</span>` : '');
+
+  briefingHoje = await api('/briefing').catch(() => null);
+  const teses = {}; (briefingHoje?.posicoes||[]).forEach(p => teses[p.posicao_id] = p.saida ? p.saida.tese_continua : 'erro');
   carteira.posicoes.forEach(p => p.tese_hoje = teses[p.id]);
-  $('posicoes').innerHTML = carteira.posicoes.map(p => `<tr data-id="${p.id}" class="${sel===p.id?'sel':''}">
-    <td>${marca(p)}<span class="ativo">${p.ativo}</span><span class="tipo">${TIPO[p.tipo]} · ${p.idade_dias==null?'sem preço':p.idade_dias===0?'hoje':'D-'+p.idade_dias}</span></td>
-    <td class="r num">${fmt(p.preco, p.tipo==='fundo'?4:2)}<span class="tipo">${p.moeda}</span></td>
-    <td class="r num ${cls(p.pnl_pct)}">${pct(p.pnl_pct)}<span class="tipo" title="peso na carteira">${p.peso!=null?fmt(p.peso,0)+'% cart.':''}</span></td></tr>`).join('');
-  if (br) renderHoje(br);
+  $('posicoes').innerHTML = carteira.posicoes.map(p => {
+    const t = p.tese_hoje || 'erro';
+    return `<li data-id="${p.id}" aria-current="${sel===p.id}" tabindex="0">
+      <span class="sinal ${t}" title="${t==='sim'?'tese de pé':t==='revisar'?'revisar':t==='nao_avaliavel'?'sem elementos hoje':'sem briefing'}">${SINAL[t]}</span>
+      <span class="nome">${esc(p.ativo)}</span>
+      <span class="var num ${cls(p.pnl_pct)}">${pct(p.pnl_pct)}</span>
+      <span class="sub">${TIPO[p.tipo]} · ${p.preco==null?'sem preço':fmt(p.preco, p.tipo==='fundo'?4:2)+' '+p.moeda}</span>
+      <span class="peso num">${p.peso!=null?fmt(p.peso,0)+'%':''}</span>
+      <button class="apagar leve" data-apagar="${p.id}" title="apagar da carteira" aria-label="apagar ${esc(p.ativo)}">&times;</button></li>`; }).join('')
+    || '<li style="cursor:default;grid-template-columns:1fr"><span class="fraco">Carteira vazia. Lance a primeira posição ali em cima.</span></li>';
+  if (briefingHoje) renderHoje(briefingHoje);
   if (sel == null && carteira.posicoes.length) selecionar(carteira.posicoes[0].id);
 }
-$('posicoes').addEventListener('click', e => { const tr = e.target.closest('tr'); if (tr) selecionar(+tr.dataset.id); });
+$('posicoes').addEventListener('click', async e => {
+  const b = e.target.closest('button[data-apagar]');
+  if (b) { e.stopPropagation(); await apagar(+b.dataset.apagar); return; }
+  const li = e.target.closest('li[data-id]'); if (li) selecionar(+li.dataset.id);
+});
+async function apagar(id) {
+  const p = carteira.posicoes.find(x => x.id === id) || {};
+  if (!confirm(`Apagar ${p.ativo} da carteira? A tese e os gatilhos dela saem junto; o histórico de preços fica guardado.`)) return;
+  await api('/posicoes/' + id, {method:'DELETE'});
+  if (sel === id) {
+    sel = null;
+    ['ativoGrafico','ativoMetricas','ativoFund','ativoTese','ativoNoticias','ativoGatilhos','ativoCompras','ativoEditar'].forEach(x => $(x).hidden = true);
+    $('ativoCab').innerHTML = '<p class="vazio">Posição apagada. Escolha outra à esquerda.</p>';
+  }
+  carregarCarteira();
+}
 document.addEventListener('keydown', e => {
-  if (['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName) || !carteira) return;
-  const ids = carteira.posicoes.map(p => p.id); const i = ids.indexOf(sel);
-  if (e.key === 'j') selecionar(ids[Math.min(ids.length-1, i+1)]); if (e.key === 'k') selecionar(ids[Math.max(0, i-1)]);
+  if (['INPUT','TEXTAREA','SELECT'].includes(document.activeElement.tagName) || !carteira || e.metaKey || e.ctrlKey) return;
+  const ids = carteira.posicoes.map(p => p.id), i = ids.indexOf(sel);
+  if (e.key === 'j') selecionar(ids[Math.min(ids.length-1, i+1)]);
+  else if (e.key === 'k') selecionar(ids[Math.max(0, i-1)]);
+  else if (e.key === 'n') { e.preventDefault(); abrirNova(); }
 });
 
-// ---- ativo ----
+// ---- página do ativo ----
 async function selecionar(id) {
-  sel = id; [...$('posicoes').children].forEach(tr => tr.classList.toggle('sel', +tr.dataset.id === id));
-  const a = await api('/ativo/' + id); const m = a.metricas || {}; const p = carteira.posicoes.find(x => x.id === id) || {};
-  ['ativoGrafico','ativoMetricas','ativoTese','ativoNoticias','ativoGatilhos','ativoEditar'].forEach(x => $(x).hidden = false);
-  $('ativoCab').innerHTML = `<div class="cab"><h2>${a.ativo}</h2><span class="preco num">${fmt(p.preco, a.tipo==='fundo'?4:2)} <span class="apagado" style="font-size:13px">${p.moeda}</span></span>
-    <span class="meta">${TIPO[a.tipo]} · ${a.identificador} · ${p.data_preco ? 'preço de ' + p.data_preco : 'sem preço'}</span></div>
-    <div class="apagado" style="margin-top:6px">${fmt(a.quantidade, 0)} × ${fmt(a.preco_medio, a.tipo==='fundo'?4:2)} desde ${a.data_compra} · posição ${fmt(p.valor_brl,0)} R$ · resultado <span class="${cls(p.pnl_brl)}">${p.pnl_brl>0?'+':''}${fmt(p.pnl_brl,0)} (${pct(p.pnl_pct)})</span></div>`;
+  if (id == null) return;
+  sel = id;
+  [...$('posicoes').children].forEach(li => li.setAttribute('aria-current', +li.dataset.id === id));
+  const a = await api('/ativo/' + id), m = a.metricas || {}, p = carteira.posicoes.find(x => x.id === id) || {};
+  ['ativoGrafico','ativoMetricas','ativoTese','ativoNoticias','ativoGatilhos','ativoCompras','ativoEditar'].forEach(x => $(x).hidden = false);
+  const casas = a.tipo === 'fundo' ? 4 : 2;
+  $('ativoCab').innerHTML = `<div class="titulo"><h2>${esc(a.ativo)}</h2>
+      <span class="preco num">${fmt(p.preco, casas)} <span class="fraco" style="font-size:14px">${p.moeda}</span></span>
+      <span class="fraco" style="font-size:13px">${TIPO[a.tipo]} · ${esc(a.identificador)}</span></div>
+    <div class="linhafina">${fmt(a.quantidade, 0)} × ${fmt(a.preco_medio, casas)} desde ${a.data_compra} ·
+      vale ${fmt(p.valor_brl,0)} R$ · <span class="${cls(p.pnl_brl)}">${p.pnl_brl>0?'+':''}${fmt(p.pnl_brl,0)} (${pct(p.pnl_pct)})</span>
+      · ${p.data_preco ? 'preço de ' + p.data_preco : 'sem preço hoje'}</div>`;
   desenhar(a);
-  const r = m.retornos || {}, b = m.bench_retornos || {}, ex = m.excesso || {}, dd = m.drawdown || {}, s52 = m.s52 || {};
-  const met = [];
-  const linha = (l, v, extra='') => met.push(`<div><div class="l">${l}</div><div class="v num ${extra}">${v}</div></div>`);
-  linha('12 meses', `<span class="${cls(r['12m'])}">${pct(r['12m'])}</span> <span class="apagado" style="font-size:11px">${m.benchmark||''} ${pct(b['12m'])}</span>`);
+
+  const r = m.retornos || {}, b = m.bench_retornos || {}, dd = m.drawdown || {}, s52 = m.s52 || {}, met = [];
+  const linha = (l, v) => met.push(`<div><div class="l">${l}</div><div class="v num">${v}</div></div>`);
+  linha('12 meses', `<span class="${cls(r['12m'])}">${pct(r['12m'])}</span> <small>${esc(m.benchmark||'')} ${pct(b['12m'])}</small>`);
   linha('desde a compra', `<span class="${cls(m.vs_preco_medio_pct ?? r.desde_compra)}">${pct(m.vs_preco_medio_pct ?? r.desde_compra)}</span>`);
-  linha('1 mês', `<span class="${cls(r['1m'])}">${pct(r['1m'])}</span> <span class="apagado" style="font-size:11px">${pct(b['1m'])}</span>`);
-  linha('drawdown', `<span class="${cls(dd.atual)}">${pct(dd.atual)}</span> <span class="apagado" style="font-size:11px">máx ${pct(dd.maximo)}</span>`);
-  linha('52 semanas', `<span class="apagado" style="font-size:11px">topo</span> ${pct(s52.pct_do_topo)} <span class="apagado" style="font-size:11px">fundo</span> ${pct(s52.pct_do_fundo)}`);
-  linha('vol 30d / 12m', `${fmt(m.vol_30d,0)}% / ${fmt(m.vol_252d,0)}%`);
-  linha('média 50 / 200', `${fmt(m.mm50, 1)} / ${fmt(m.mm200, 1)}`);
+  linha('1 mês', `<span class="${cls(r['1m'])}">${pct(r['1m'])}</span> <small>${pct(b['1m'])}</small>`);
+  linha('queda desde o topo', `<span class="${cls(dd.atual)}">${pct(dd.atual)}</span> <small>pior ${pct(dd.maximo)}</small>`);
+  linha('52 semanas', `${pct(s52.pct_do_topo)} <small>do topo</small> ${pct(s52.pct_do_fundo)} <small>do fundo</small>`);
+  linha('volatilidade', `${fmt(m.vol_30d,0)}% <small>30d</small> ${fmt(m.vol_252d,0)}% <small>12m</small>`);
+  linha('médias 50 / 200', `${fmt(m.mm50, 1)} / ${fmt(m.mm200, 1)}`);
   if (m.beta_12m != null) linha('beta 12m', fmt(m.beta_12m, 2));
   if (a.tipo === 'fundo') {
-    linha('% do benchmark 12m', `${fmt((m.pct_do_bench||{})['12m'],0)}%`);
-    linha('janelas de 12m batidas', m.janelas_12m ? `${m.janelas_12m.batidas}/${m.janelas_12m.n} (${fmt(m.janelas_12m.pct,0)}%)` : '–');
-    const pr = (m.pares||{})['12m']; if (pr) linha('vs pares (12m)', `mediana ${pct(pr.mediana_pares)} · percentil ${fmt(pr.percentil,0)} de ${pr.n_pares}`);
-    linha('taxas adm / perf', `${m.taxa_adm!=null?fmt(m.taxa_adm,2)+'%':'sem lâmina'} / ${m.taxa_perf!=null?fmt(m.taxa_perf,0)+'%':'–'}`);
-    linha('PL', `R$ ${fmt(m.pl/1e6,0)} mi`); linha('captação líquida 6m', `<span class="${cls(m.captacao_liquida_6m)}">R$ ${fmt(m.captacao_liquida_6m/1e6,0)} mi</span>`);
+    linha('do benchmark em 12m', `${fmt((m.pct_do_bench||{})['12m'],0)}%`);
+    linha('janelas de 12m batidas', m.janelas_12m ? `${m.janelas_12m.batidas}/${m.janelas_12m.n} <small>${fmt(m.janelas_12m.pct,0)}%</small>` : '–');
+    const pr = (m.pares||{})['12m']; if (pr) linha('contra os pares', `percentil ${fmt(pr.percentil,0)} <small>de ${pr.n_pares} fundos</small>`);
+    linha('taxas', `${m.taxa_adm!=null?fmt(m.taxa_adm,2)+'% adm':'sem lâmina'} ${m.taxa_perf!=null?'· '+fmt(m.taxa_perf,0)+'% perf':''}`);
+    linha('patrimônio', `R$ ${fmt(m.pl/1e6,0)} <small>mi</small>`);
+    linha('captação em 6m', `<span class="${cls(m.captacao_liquida_6m)}">R$ ${fmt(m.captacao_liquida_6m/1e6,0)} <small>mi</small></span>`);
   }
+  $('metricas').innerHTML = met.join('');
+  $('metData').textContent = m.data_metricas ? 'calculado em ' + m.data_metricas : 'ainda sem cálculo';
+
   const f = m.fundamentos; $('ativoFund').hidden = !f;
   if (f) {
-    const fl = []; const li = (l, v) => fl.push(`<div><div class="l">${l}</div><div class="v num">${v}</div></div>`);
-    li('P/L', fmt(f.pe,1)); li('P/VP', fmt(f.pvp,2)); li('EV/EBITDA', fmt(f.ev_ebitda,1)); li('margem EBITDA', f.margem_ebitda!=null?fmt(f.margem_ebitda,1)+'%':'–');
-    li('margem líquida', f.margem_liquida!=null?fmt(f.margem_liquida,1)+'%':'–'); li('ROE', f.roe!=null?fmt(f.roe,1)+'%':'–');
-    li('dív. líq./EBITDA', f.divida_liq_ebitda!=null?fmt(f.divida_liq_ebitda,2)+'×':'–'); li('dividend yield', f.dy!=null?fmt(f.dy,2)+'%':'–');
-    li('payout', f.payout!=null?fmt(f.payout,0)+'%':'–'); li('receita 12m', f.receita!=null?fmt(f.receita/1e9,1)+' bi '+(f.moeda||''):'–');
-    li('cresc. receita', f.cresc_receita!=null?pct(f.cresc_receita):'–'); li('cresc. lucro', f.cresc_lucro!=null?pct(f.cresc_lucro):'–');
-    $('fundamentos').innerHTML = fl.join(''); $('fundData').textContent = f.ultimo_balanco ? 'último balanço ' + f.ultimo_balanco + ' · Yahoo' : 'Yahoo';
+    const fl = [], li = (l, v) => fl.push(`<div><div class="l">${l}</div><div class="v num">${v}</div></div>`);
+    li('preço / lucro', fmt(f.pe,1)); li('preço / patrimônio', fmt(f.pvp,2)); li('EV / EBITDA', fmt(f.ev_ebitda,1));
+    li('margem EBITDA', f.margem_ebitda!=null?fmt(f.margem_ebitda,1)+'%':'–');
+    li('margem líquida', f.margem_liquida!=null?fmt(f.margem_liquida,1)+'%':'–'); li('retorno sobre o PL', f.roe!=null?fmt(f.roe,1)+'%':'–');
+    li('dívida líquida / EBITDA', f.divida_liq_ebitda!=null?fmt(f.divida_liq_ebitda,2)+'×':'–');
+    li('dividendos no ano', f.dy!=null?fmt(f.dy,2)+'%':'–'); li('do lucro distribuído', f.payout!=null?fmt(f.payout,0)+'%':'–');
+    li('receita 12m', f.receita!=null?fmt(f.receita/1e9,1)+' bi '+(f.moeda||''):'–');
+    li('receita cresceu', f.cresc_receita!=null?pct(f.cresc_receita):'–'); li('lucro cresceu', f.cresc_lucro!=null?pct(f.cresc_lucro):'–');
+    $('fundamentos').innerHTML = fl.join('');
+    $('fundData').textContent = (f.ultimo_balanco ? 'balanço de ' + f.ultimo_balanco + ' · ' : '') + 'Yahoo';
     const tri = m.trimestres || [];
-    $('trimestres').innerHTML = tri.length ? `<tr class="apagado"><td>trimestre (bi ${f.moeda_dre||''})</td><td class="r">receita</td><td class="r">EBITDA</td><td class="r">lucro</td></tr>` +
-      tri.slice(-6).reverse().map(t => `<tr style="cursor:default"><td>${t.trimestre.slice(0,7)}</td><td class="r num">${fmt(t.receita/1e9,1)}</td><td class="r num">${fmt(t.ebitda/1e9,1)}</td><td class="r num ${cls(t.lucro)}">${fmt(t.lucro/1e9,1)}</td></tr>`).join('') : '';
+    $('trimestres').innerHTML = tri.length ? `<tr><th>trimestre</th><th>receita</th><th>EBITDA</th><th>lucro</th></tr>
+      <tr><th style="border-top:0"><span class="fraco">bilhões de ${esc(f.moeda_dre||'')}</span></th><th></th><th></th><th></th></tr>` +
+      tri.slice(-6).reverse().map(t => `<tr><td>${t.trimestre.slice(0,7)}</td><td class="num">${fmt(t.receita/1e9,1)}</td>
+        <td class="num">${fmt(t.ebitda/1e9,1)}</td><td class="num ${cls(t.lucro)}">${fmt(t.lucro/1e9,1)}</td></tr>`).join('') : '';
   }
-  $('metricas').innerHTML = met.join(''); $('metData').textContent = m.data_metricas ? 'calculado em ' + m.data_metricas : 'sem métricas ainda';
-  $('teseTxt').value = a.tese || ''; $('teseHist').textContent = a.historico_teses.length ? `${a.historico_teses.length} versão(ões); última em ${a.historico_teses.at(-1).criada_em.slice(0,10)}` : 'sem tese ainda';
-  const br = await api('/briefing').catch(() => null); const bp = (br?.posicoes||[]).find(x => x.posicao_id === id);
-  if (bp && bp.saida) { const s = bp.saida; $('teseVeredito').innerHTML = `<div class="tese-box prosa"><div class="veredito ${s.tese_continua}">${{sim:'Tese continua de pé', revisar:'Revisar a tese', nao_avaliavel:'Sem elementos para avaliar hoje'}[s.tese_continua]}</div>
-      <div>${s.justificativa}</div><div class="apagado" style="margin-top:6px">${s.situacao}</div>${s.leitura_fundamentos ? `<div style="margin-top:6px"><span class="apagado">Fundamentos:</span> ${s.leitura_fundamentos}</div>` : ''}${s.pontos_de_atencao.length ? '<ul style="margin:6px 0 0;padding-left:18px">' + s.pontos_de_atencao.map(x => `<li>${x}</li>`).join('') + '</ul>' : ''}
-      <div class="apagado" style="font-size:11px;margin-top:6px">IA · ${bp.modelo} · ${(bp.latencia_ms/1000).toFixed(0)} s · ${bp.tokens_in}+${bp.tokens_out} tokens${bp.custo_usd ? ' · US$ ' + bp.custo_usd.toFixed(4) : ''}</div></div>`; }
-  else $('teseVeredito').innerHTML = bp ? `<div class="tese-box prosa apagado">Briefing de hoje inválido ou indisponível: ${bp.erro||''}</div>` : '<div class="tese-box prosa apagado">Sem briefing de hoje para esta posição.</div>';
-  const ns = await api('/noticias?posicao=' + id); $('notN').textContent = ns.length;
-  $('noticias').innerHTML = ns.length ? ns.map(n => `<li><a href="${n.url}" target="_blank" rel="noopener">${n.titulo}</a><div class="meta">${n.fonte||''} · ${(n.publicada_em||'').slice(0,10)} · casou por ${n.metodo}</div></li>`).join('') : '<li class="apagado">Nada casou com esta posição na janela.</li>';
+
+  $('teseTxt').value = a.tese || '';
+  $('teseHist').textContent = a.historico_teses.length ? `${a.historico_teses.length} versão(ões) · última em ${a.historico_teses.at(-1).criada_em.slice(0,10)}` : 'ainda sem tese';
+  const bp = (briefingHoje?.posicoes||[]).find(x => x.posicao_id === id), s = bp && bp.saida;
+  if (s) {
+    const rot = {sim:'A tese continua de pé', revisar:'Vale revisar a tese', nao_avaliavel:'Nada hoje que permita julgar'};
+    $('teseVeredito').innerHTML = `<div class="tese">
+      <span class="sinal ${s.tese_continua}">${SINAL[s.tese_continua]}</span>
+      <div><div class="veredito ${s.tese_continua}">${rot[s.tese_continua]}</div>
+        ${a.tese ? `<p class="citar">${esc(a.tese)}</p>` : ''}
+        <div class="prosa"><p>${esc(s.justificativa)}</p><p class="fraco">${esc(s.situacao)}</p>
+        ${s.leitura_fundamentos ? `<p>${esc(s.leitura_fundamentos)}</p>` : ''}</div>
+        ${s.pontos_de_atencao.length ? '<ul class="itens" style="margin-top:8px">' + s.pontos_de_atencao.map(x => `<li>${esc(x)}</li>`).join('') + '</ul>' : ''}
+        <div class="assinatura">${esc(bp.modelo)} · ${(bp.latencia_ms/1000).toFixed(0)} s · ${bp.tokens_in}+${bp.tokens_out} tokens${bp.custo_usd ? ' · US$ ' + bp.custo_usd.toFixed(4) : ''} · descreve e confere, não recomenda</div>
+      </div></div>`;
+  } else $('teseVeredito').innerHTML = `<p class="fraco" style="font-size:14px">${bp ? 'O briefing de hoje não passou na checagem: ' + esc(bp.erro||'') : 'Sem briefing de hoje para esta posição.'}</p>`;
+
+  const ns = await api('/noticias?posicao=' + id);
+  $('notN').textContent = ns.length || '';
+  $('noticias').innerHTML = ns.length ? ns.map(n => `<li><a href="${esc(n.url)}" target="_blank" rel="noopener">${esc(n.titulo)}</a>
+    <div class="meta">${esc(n.fonte||'')} · ${(n.publicada_em||'').slice(0,10)} · casou por ${esc(n.metodo)}</div></li>`).join('')
+    : '<li class="fraco" style="font-size:14px">Nada casou com esta posição. Ajuste os termos de notícia ali embaixo se ela tem nome difícil.</li>';
   const gs = await api('/gatilhos?posicao=' + id);
-  $('gatilhos').innerHTML = gs.length ? gs.map(g => `<li class="gat"><span>${g.descricao || g.regra}${g.posicao_id==null?' <span class="apagado">(global)</span>':''}</span><button data-g="${g.id}">remover</button></li>`).join('') : '<li class="apagado">Sem gatilhos.</li>';
-  $('eQtd').value = a.quantidade; $('ePm').value = a.preco_medio; $('eData').value = a.data_compra; $('eBusca').value = a.busca || ''; $('eMandato').value = a.mandato || '';
+  $('gatilhos').innerHTML = gs.length ? gs.map(g => `<li style="display:flex;justify-content:space-between;gap:10px;align-items:baseline">
+    <span>${esc(g.descricao || g.regra)}${g.posicao_id==null?' <span class="fraco">(vale para tudo)</span>':''}</span>
+    <button class="leve" data-g="${g.id}">remover</button></li>`).join('') : '<li class="fraco" style="font-size:14px">Sem gatilhos além dos padrão.</li>';
+
+  $('ativoCompras').hidden = false;
+  pintarCompras(a);
+  $('eResumo').value = `${fmt(a.quantidade, a.tipo === 'fundo' ? 4 : 0)} × ${fmt(a.preco_medio, casas)} — vem das compras`;
+  $('eBusca').value = a.busca || ''; $('eMandato').value = a.mandato || ''; $('eAviso').textContent = '';
 }
-function fmtDesc(d, p) { return d.replace(/\{(\w+)\}/g, (_, k) => p[k] ?? {pct:15, fator:2, limite:'–'}[k] ?? '–').replace('{limite}', p.pct ?? '–'); }
+
+function pintarCompras(a) {
+  const cs = a.compras || [], casas = a.tipo === 'fundo' ? 4 : 2, unica = cs.length <= 1;
+  $('comprasResumo').textContent = cs.length === 1 ? '1 compra' : `${cs.length} compras · preço médio ${fmt(a.preco_medio, casas)}`;
+  $('compras').innerHTML = `<tr><th>data</th><th>quantidade</th><th>preço</th><th>valor</th><th></th></tr>` + cs.map(c =>
+    `<tr><td>${c.data}</td><td class="num">${fmt(c.quantidade, a.tipo === 'fundo' ? 4 : 0)}</td>
+      <td class="num">${fmt(c.preco, casas)}</td><td class="num">${fmt(c.quantidade * c.preco, 0)}</td>
+      <td><button class="leve" data-compra="${c.id}" ${unica ? 'disabled title="a posição precisa de pelo menos uma compra"' : ''}>&times;</button></td></tr>`).join('');
+  $('cData').value = new Date().toISOString().slice(0,10);
+  ['cValor','cQtd','cPreco'].forEach(i => $(i).value = '');
+  $('cAviso').textContent = '';
+}
+// mesma conta do lançamento: data + valor -> preço daquele dia -> quantidade
+async function precoDaCompra() {
+  const a = carteira.posicoes.find(x => x.id === sel); if (!a || !$('cData').value) return;
+  $('cAviso').className = 'fraco'; $('cAviso').textContent = 'procurando o preço desse dia…';
+  try {
+    const c = await api(`/cotacao?tipo=${a.tipo}&identificador=${encodeURIComponent(a.identificador)}&data=${$('cData').value}`);
+    if (c.preco == null) { $('cAviso').className = 'aviso'; $('cAviso').textContent = c.erro || 'sem preço nessa data'; return; }
+    $('cPreco').value = c.preco.toFixed(a.tipo === 'fundo' ? 6 : 2);
+    $('cAviso').className = 'fraco';
+    $('cAviso').textContent = `${fmt(c.preco, a.tipo === 'fundo' ? 4 : 2)} · ${c.fonte}` + (c.data !== $('cData').value ? ` — pregão de ${c.data}` : '');
+    if (+$('cValor').value) qtdDaCompra();
+  } catch (e) { $('cAviso').className = 'aviso'; $('cAviso').textContent = e.message; }
+}
+function qtdDaCompra() {
+  const a = carteira.posicoes.find(x => x.id === sel), v = +$('cValor').value, pr = +$('cPreco').value;
+  if (!a || !v || !pr) return;
+  const bruto = v / pr;
+  $('cQtd').value = a.tipo === 'fundo' ? +bruto.toFixed(6) : a.tipo === 'tesouro' ? Math.floor(bruto * 100) / 100 : Math.floor(bruto);
+}
+$('cData').addEventListener('change', precoDaCompra);
+$('cValor').addEventListener('input', qtdDaCompra);
+$('btnCompra').onclick = async () => {
+  const q = +$('cQtd').value, pr = +$('cPreco').value;
+  if (!q || !pr) { $('cAviso').className = 'aviso'; $('cAviso').textContent = 'Preencha a data e o valor (ou a quantidade e o preço).'; return; }
+  try {
+    await api(`/posicoes/${sel}/compras`, {method:'POST', body:JSON.stringify({data:$('cData').value, quantidade:q, preco:pr})});
+    await carregarCarteira(); await selecionar(sel);
+  } catch (e) { $('cAviso').className = 'aviso'; $('cAviso').textContent = e.message; }
+};
+$('compras').addEventListener('click', async e => {
+  const b = e.target.closest('button[data-compra]'); if (!b || b.disabled) return;
+  if (!confirm('Apagar esta compra? O preço médio é recalculado.')) return;
+  try { await api('/compras/' + b.dataset.compra, {method:'DELETE'}); await carregarCarteira(); await selecionar(sel); }
+  catch (err) { $('cAviso').className = 'aviso'; $('cAviso').textContent = err.message; }
+});
+
 function desenhar(a) {
-  if (!grafico) { grafico = LightweightCharts.createChart($('grafico'), {layout:{background:{color:'#12151A'}, textColor:'#8C94A0', fontFamily:'IBM Plex Mono'}, grid:{vertLines:{color:'#1F242C'}, horzLines:{color:'#1F242C'}}, rightPriceScale:{borderColor:'#2A3039'}, timeScale:{borderColor:'#2A3039'}, autoSize:true, crosshair:{mode:0}}); }
+  const escuro = matchMedia('(prefers-color-scheme: dark)').matches;
+  if (!grafico) grafico = LightweightCharts.createChart($('grafico'), {
+    layout:{background:{color:css('--cartao')}, textColor:css('--tinta2'), fontFamily:'Archivo, sans-serif', fontSize:11},
+    grid:{vertLines:{color:css('--linha2')}, horzLines:{color:css('--linha2')}},
+    rightPriceScale:{borderColor:css('--linha')}, timeScale:{borderColor:css('--linha')}, autoSize:true, crosshair:{mode:0}});
   if (serieG) grafico.removeSeries(serieG);
-  const s = a.serie || [];
-  if (a.tipo === 'fundo') { serieG = grafico.addLineSeries({color:'#E9B44C', lineWidth:2}); serieG.setData(s.map(x => ({time:x.data, value:x.valor}))); }
-  else { serieG = grafico.addCandlestickSeries({upColor:'#57C48A', downColor:'#E36B5F', wickUpColor:'#57C48A', wickDownColor:'#E36B5F', borderVisible:false}); serieG.setData(s.map(x => ({time:x.data, open:x.abertura, high:x.maxima, low:x.minima, close:x.fechamento}))); }
-  serieG.createPriceLine({price:a.preco_medio, color:'#8C94A0', lineStyle:2, lineWidth:1, title:'preço médio'});
-  const m = a.metricas || {}; if (m.mm200) serieG.createPriceLine({price:m.mm200, color:'#6FA8DC', lineStyle:3, lineWidth:1, title:'mm200'});
+  const s = a.serie || [], alta = css('--alta'), baixa = css('--baixa');
+  if (a.tipo === 'fundo' || !s.length || s[0].abertura == null) {
+    serieG = grafico.addLineSeries({color:css('--elo'), lineWidth:2});
+    serieG.setData(s.map(x => ({time:x.data, value:x.valor ?? x.fechamento})));
+  } else {
+    serieG = grafico.addCandlestickSeries({upColor:alta, downColor:baixa, wickUpColor:alta, wickDownColor:baixa, borderVisible:false});
+    serieG.setData(s.map(x => ({time:x.data, open:x.abertura, high:x.maxima, low:x.minima, close:x.fechamento})));
+  }
+  serieG.createPriceLine({price:a.preco_medio, color:css('--tinta2'), lineStyle:2, lineWidth:1, title:'seu preço'});
+  const m = a.metricas || {};
+  if (m.mm200) serieG.createPriceLine({price:m.mm200, color:escuro?'#51749B':'#9AA79C', lineStyle:3, lineWidth:1, title:'média 200'});
   grafico.timeScale().setVisibleLogicalRange({from:Math.max(0, s.length - 260), to:s.length});
 }
+
 $('btnTese').onclick = async () => { await api(`/posicoes/${sel}/tese`, {method:'POST', body:JSON.stringify({texto:$('teseTxt').value})}); selecionar(sel); };
-$('btnSalvar').onclick = async () => { try { await api('/posicoes/' + sel, {method:'PUT', body:JSON.stringify({quantidade:+$('eQtd').value, preco_medio:+$('ePm').value, data_compra:$('eData').value, busca:$('eBusca').value, mandato:$('eMandato').value})}); $('eAviso').textContent = ''; await carregarCarteira(); selecionar(sel); } catch (e) { $('eAviso').textContent = e.message; } };
-$('btnTermos').onclick = async () => { $('eAviso').textContent = 'gerando…'; try { const r = await api('/posicoes/' + sel, {method:'PUT', body:JSON.stringify({mandato:$('eMandato').value, gerar_termos:true})}); $('eBusca').value = r.busca; $('eAviso').textContent = r.busca ? 'termos: ' + r.busca : 'a IA não devolveu termos (mandato vazio ou chave ausente)'; } catch (e) { $('eAviso').textContent = e.message; } };
-$('btnExcluir').onclick = async () => { if (!confirm('Excluir esta posição da carteira?')) return; await api('/posicoes/' + sel, {method:'DELETE'}); sel = null; carregarCarteira(); };
-$('gatilhos').addEventListener('click', async e => { const b = e.target.closest('button'); if (!b) return; await api('/gatilhos/' + b.dataset.g, {method:'DELETE'}); selecionar(sel); });
-$('btnGat').onclick = async () => { try { await api('/gatilhos', {method:'POST', body:JSON.stringify({posicao_id:sel, regra:$('gRegra').value, parametros:JSON.parse($('gParams').value || '{}')})}); selecionar(sel); } catch (e) { alert(e.message); } };
+$('btnSalvar').onclick = async () => {
+  try { await api('/posicoes/' + sel, {method:'PUT', body:JSON.stringify({busca:$('eBusca').value, mandato:$('eMandato').value})});
+    $('eAviso').className = 'ok'; $('eAviso').textContent = 'salvo'; await carregarCarteira(); selecionar(sel); }
+  catch (e) { $('eAviso').className = 'aviso'; $('eAviso').textContent = e.message; }
+};
+$('btnTermos').onclick = async () => {
+  $('eAviso').className = 'fraco'; $('eAviso').textContent = 'a IA está lendo o mandato…';
+  try { const r = await api('/posicoes/' + sel, {method:'PUT', body:JSON.stringify({mandato:$('eMandato').value, gerar_termos:true})});
+    $('eBusca').value = r.busca; $('eAviso').className = r.busca ? 'ok' : 'aviso';
+    $('eAviso').textContent = r.busca ? 'termos: ' + r.busca : 'a IA não devolveu termos — descreva o mandato em uma frase e tente de novo'; }
+  catch (e) { $('eAviso').className = 'aviso'; $('eAviso').textContent = e.message; }
+};
+$('btnExcluir').onclick = () => apagar(sel);
+$('gatilhos').addEventListener('click', async e => { const b = e.target.closest('button'); if (!b) return;
+  await api('/gatilhos/' + b.dataset.g, {method:'DELETE'}); selecionar(sel); });
+$('btnGat').onclick = async () => {
+  try { await api('/gatilhos', {method:'POST', body:JSON.stringify({posicao_id:sel, regra:$('gRegra').value, parametros:JSON.parse($('gParams').value || '{}')})});
+    selecionar(sel); } catch (e) { alert(e.message); }
+};
 
 // ---- hoje ----
 function renderHoje(br) {
-  $('brData').textContent = br.data || ''; const c = br.carteira && br.carteira.saida;
-  $('brCarteira').innerHTML = c ? c.resumo : `<span class="apagado">${br.carteira ? 'Briefing da carteira inválido: ' + (br.carteira.erro||'') : 'Sem briefing de hoje ainda.'}</span>`;
-  $('olhar').innerHTML = c && c.olhar_hoje.length ? 'Olhar hoje: ' + c.olhar_hoje.map(a => `<b>${a}</b>`).join(', ') : '';
+  $('brData').textContent = br.data || '';
+  const c = br.carteira && br.carteira.saida;
+  $('brCarteira').innerHTML = c ? `<p>${esc(c.resumo)}</p>`
+    : `<p class="fraco">${br.carteira ? 'O resumo de hoje não passou na checagem: ' + esc(br.carteira.erro||'') : 'O briefing sai às 7h. Você também pode gerar agora, ali embaixo.'}</p>`;
+  $('olhar').innerHTML = c && c.olhar_hoje.length ? '<span class="fraco" style="font-size:13px">olhar hoje</span><br>' + c.olhar_hoje.map(a => `<span class="chip">${esc(a)}</span>`).join('') : '';
   const nome = id => (carteira?.posicoes.find(p => p.id === id) || {}).ativo || '?';
-  $('brPos').innerHTML = (br.posicoes||[]).map(p => { const s = p.saida; return `<li><span class="marca ${s ? s.tese_continua : 'erro'}"></span><b>${p.ativo || nome(p.posicao_id)}</b> <span class="apagado">${s ? {sim:'de pé', revisar:'revisar', nao_avaliavel:'sem elementos'}[s.tese_continua] : 'inválido'}</span>${s ? `<div class="meta prosa" style="font-size:12px">${s.justificativa}</div>` : ''}</li>`; }).join('') || '<li class="apagado">–</li>';
-  $('opCusto').textContent = br.tokens_in ? `IA hoje: ${br.tokens_in}+${br.tokens_out} tokens${br.custo_usd ? ' · US$ ' + br.custo_usd.toFixed(3) : ''}` : '';
+  const rot = {sim:'de pé', revisar:'revisar', nao_avaliavel:'sem elementos'};
+  $('brPos').innerHTML = (br.posicoes||[]).map(p => { const s = p.saida, t = s ? s.tese_continua : 'erro';
+    return `<li><span class="sinal ${t}" style="margin-right:7px">${SINAL[t]}</span><b>${esc(p.ativo || nome(p.posicao_id))}</b>
+      <span class="fraco" style="font-size:13px">${s ? rot[t] : 'não passou na checagem'}</span>
+      ${s ? `<div class="prosa" style="font-size:14px;margin-top:3px">${esc(s.justificativa)}</div>` : ''}</li>`; }).join('')
+    || '<li class="fraco" style="font-size:14px">–</li>';
+  $('opCusto').textContent = br.tokens_in ? `${br.tokens_in}+${br.tokens_out} tokens${br.custo_usd ? ' · US$ ' + br.custo_usd.toFixed(3) : ''}` : '';
 }
 async function disparos() {
-  const ds = await api('/disparos'); $('dispN').textContent = ds.length || '';
-  $('disparos').innerHTML = ds.length ? ds.map(d => `<div class="disparo"><b>${d.ativo||'carteira'}</b> — ${d.descricao}<div class="meta">${d.data} · <a href="#" data-v="${d.id}">marcar como visto</a></div></div>`).join('') : '<span class="apagado">Nenhum pendente.</span>';
+  const ds = await api('/disparos');
+  $('dispN').textContent = ds.length || '';
+  $('disparos').innerHTML = ds.length ? ds.map(d => `<div class="disparo"><b>${esc(d.ativo||'carteira')}</b> ${esc(d.descricao)}
+    <div class="meta">${d.data} · <a href="#" data-v="${d.id}">já vi</a></div></div>`).join('')
+    : '<span class="fraco" style="font-size:13px">Nada disparou.</span>';
 }
-$('disparos').addEventListener('click', async e => { const a = e.target.closest('a[data-v]'); if (!a) return; e.preventDefault(); await api(`/disparos/${a.dataset.v}/visto`, {method:'POST'}); disparos(); });
+$('disparos').addEventListener('click', async e => { const a = e.target.closest('a[data-v]'); if (!a) return;
+  e.preventDefault(); await api(`/disparos/${a.dataset.v}/visto`, {method:'POST'}); disparos(); });
 async function operacao() {
-  const o = await api('/operacao'); const ult = {};
+  const o = await api('/operacao'), ult = {};
   o.coletas.forEach(c => { if (!ult[c.fonte]) ult[c.fonte] = c; });
-  $('operacao').innerHTML = Object.values(ult).map(c => `<span>${c.fonte}</span><span class="${c.erro?'erro':'ok'}" title="${c.erro||''}">${c.erro ? 'erro' : (c.linhas ?? '–') + ' · ' + (c.duracao_ms/1000).toFixed(0) + 's'} <span class="apagado">${c.executada_em.slice(5,16).replace('T',' ')}</span></span>`).join('');
-  $('relogio').textContent = 'agora ' + o.agora.slice(11,16) + ' BRT';
+  $('operacao').innerHTML = Object.values(ult).map(c => `<span>${esc(c.fonte)}</span>
+    <span class="${c.erro?'e':''}" title="${esc(c.erro||'')}">${c.erro ? 'erro' : (c.linhas ?? '–') + ' linhas · ' + (c.duracao_ms/1000).toFixed(0) + 's'}
+    <span class="fraco">${c.executada_em.slice(5,16).replace('T',' ')}</span></span>`).join('');
+  $('relogio').textContent = o.agora.slice(11,16) + ' em São Paulo';
 }
-async function job(nome) { $('jobStatus').textContent = 'rodando ' + nome + '…'; try { await api('/job/' + nome, {method:'POST'}); $('jobStatus').textContent = nome + ' concluído'; tudo(); } catch (e) { $('jobStatus').textContent = e.message; } }
-$('btnJobFech').onclick = () => job('fechamento'); $('btnJobBrief').onclick = () => job('briefing');
+async function job(nome) {
+  $('jobStatus').textContent = nome === 'briefing' ? 'a IA está escrevendo…' : 'buscando preços…';
+  try { await api('/job/' + nome, {method:'POST'}); $('jobStatus').textContent = 'pronto'; tudo(); }
+  catch (e) { $('jobStatus').textContent = e.message; }
+}
+$('btnJobFech').onclick = () => job('fechamento');
+$('btnJobBrief').onclick = () => job('briefing');
 
-// ---- nova posicao ----
-$('btnNova').onclick = () => $('nova').classList.add('aberto'); $('btnCancelar').onclick = () => $('nova').classList.remove('aberto');
+// ---- lançar posição, com busca ----
+let escolhido = null, marcado = -1, sugestoes = [], atraso = null;
+function abrirNova() { $('nova').classList.add('aberto'); $('nBusca').focus(); }
+$('btnNova').onclick = abrirNova;
+$('btnCancelar').onclick = () => $('nova').classList.remove('aberto');
+$('nova').addEventListener('keydown', e => { if (e.key === 'Escape') $('nova').classList.remove('aberto'); });
+
+function pintarSugestoes() {
+  $('nLista').innerHTML = sugestoes.map((s, i) => `<li role="option" data-i="${i}" aria-selected="${i===marcado}">
+    <span class="cod">${esc(s.tipo === 'fundo' ? s.ativo.slice(0, 42) : s.identificador)}</span>
+    <span class="onde">${esc(s.onde)}${s.inativo ? ' · encerrado' : ''}</span>
+    <span class="desc">${esc(s.detalhe || s.ativo)}</span></li>`).join('');
+  $('nBusca').setAttribute('aria-expanded', sugestoes.length > 0);
+}
+$('nBusca').addEventListener('input', () => {
+  clearTimeout(atraso);
+  const q = $('nBusca').value.trim();
+  if (q.length < 2) { sugestoes = []; marcado = -1; pintarSugestoes(); return; }
+  atraso = setTimeout(async () => {
+    try { const r = await api('/buscar?q=' + encodeURIComponent(q));
+      sugestoes = r.itens; marcado = r.itens.length ? 0 : -1; pintarSugestoes();
+      if (r.avisos.length) $('nAviso').textContent = 'busca de ticker indisponível agora (' + r.avisos.join(', ') + ') — fundos e Tesouro seguem funcionando';
+      else $('nAviso').textContent = '';
+    } catch (e) { $('nAviso').textContent = e.message; }
+  }, 220);
+});
+$('nBusca').addEventListener('keydown', e => {
+  if (!sugestoes.length) return;
+  if (e.key === 'ArrowDown') { marcado = (marcado + 1) % sugestoes.length; pintarSugestoes(); e.preventDefault(); }
+  else if (e.key === 'ArrowUp') { marcado = (marcado - 1 + sugestoes.length) % sugestoes.length; pintarSugestoes(); e.preventDefault(); }
+  else if (e.key === 'Enter' && marcado >= 0) { escolher(sugestoes[marcado]); e.preventDefault(); }
+});
+$('nLista').addEventListener('mousedown', e => { const li = e.target.closest('li[data-i]'); if (li) { e.preventDefault(); escolher(sugestoes[+li.dataset.i]); } });
+
+async function escolher(s) {
+  escolhido = s; sugestoes = []; pintarSugestoes();
+  $('nBusca').value = s.tipo === 'fundo' ? s.ativo : `${s.identificador} — ${s.ativo}`;
+  $('nEscolhido').hidden = false;
+  $('nCod').textContent = s.tipo === 'fundo' ? s.ativo : s.identificador;
+  $('nNome').textContent = [TIPO[s.tipo], s.onde, s.tipo === 'fundo' ? s.identificador.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5') : s.ativo].filter(Boolean).join(' · ');
+  $('nMandatoBox').hidden = !['fundo','fii','etf','etf_us'].includes(s.tipo);
+  if (!$('nData').value) $('nData').value = new Date().toISOString().slice(0,10);
+  $('nValor').focus();
+  precoDaData();
+}
+
+// O preço do dia da compra é o que transforma "pus R$ 5.000 em tal dia" em quantidade e preço médio.
+let precoCompra = null;
+async function precoDaData() {
+  if (!escolhido) return;
+  const d = $('nData').value, casas = escolhido.tipo === 'fundo' ? 6 : 2;
+  precoCompra = null; $('nCalc').hidden = true;
+  $('nPreco').textContent = d ? 'procurando o preço desse dia…' : 'buscando preço…';
+  try {
+    const c = await api(`/cotacao?tipo=${escolhido.tipo}&identificador=${encodeURIComponent(escolhido.identificador)}` + (d ? `&data=${d}` : ''));
+    if (c.preco == null) { $('nPreco').textContent = c.erro || 'sem preço nessa data'; return; }
+    precoCompra = c.preco;
+    $('nPreco').textContent = `${d ? 'no dia da compra' : 'agora'}: ${fmt(c.preco, Math.min(casas,4))} ${escolhido.moeda} · ${c.fonte}`
+      + (c.data && c.data !== d ? ` — pregão de ${c.data}` : '') + (c.detalhe ? ' · ' + c.detalhe : '');
+    if (!$('nPm').value) $('nPm').value = c.preco.toFixed(casas);
+    calcularPorValor();
+  } catch (e) { $('nPreco').textContent = e.message; }
+}
+function calcularPorValor() {
+  const v = +$('nValor').value;
+  if (!v || !precoCompra || !escolhido) { $('nCalc').hidden = true; return; }
+  const t = escolhido.tipo, casas = t === 'fundo' ? 6 : 2;
+  // fundo é comprado em cotas fracionadas; Tesouro vai até 0,01 título; ação, FII, ETF e BDR só inteiros.
+  const bruto = v / precoCompra;
+  const q = t === 'fundo' ? +bruto.toFixed(6) : t === 'tesouro' ? Math.floor(bruto * 100) / 100 : Math.floor(bruto);
+  const unidade = t === 'fundo' ? 'cotas' : t === 'tesouro' ? 'títulos' : 'papéis';
+  const sobra = v - q * precoCompra;
+  $('nQtd').value = q;
+  $('nPm').value = precoCompra.toFixed(casas);
+  $('nCalc').hidden = false;
+  $('nCalc').innerHTML = q > 0
+    ? `<span class="ok">R$ ${fmt(v,2)} ÷ ${fmt(precoCompra, Math.min(casas,4))} = <b>${fmt(q, t==='fundo'?4:2)} ${unidade}</b></span>`
+      + (sobra >= 0.01 ? ` <span class="fraco">sobraram R$ ${fmt(sobra,2)} — ajuste se quiser</span>` : '')
+    : `<span class="aviso">R$ ${fmt(v,2)} não dá nem ${unidade === 'papéis' ? 'um papel' : 'uma unidade'} a ${fmt(precoCompra,2)}.</span>`;
+}
+$('nData').addEventListener('change', precoDaData);
+$('nValor').addEventListener('input', calcularPorValor);
+$('nTrocar').onclick = () => { escolhido = null; precoCompra = null; $('nCalc').hidden = true; $('nEscolhido').hidden = true; $('nBusca').value = ''; $('nBusca').focus(); };
+let compras = [];
+function pintarCompras2() {
+  $('nLista2').hidden = !compras.length;
+  if (!compras.length) return;
+  const casas = escolhido && escolhido.tipo === 'fundo' ? 4 : 2;
+  $('nLista2').innerHTML = '<span class="fraco">compras guardadas</span>' + compras.map((c, i) =>
+    `<div style="display:flex;gap:10px;align-items:baseline;justify-content:space-between;border-top:1px solid var(--linha2);padding:4px 0">
+      <span>${c.data} · ${fmt(c.quantidade, casas === 4 ? 4 : 0)} × ${fmt(c.preco, casas)}</span>
+      <button class="leve" type="button" data-tira="${i}">&times;</button></div>`).join('');
+}
+$('nLista2').addEventListener('click', e => { const b = e.target.closest('button[data-tira]'); if (!b) return;
+  compras.splice(+b.dataset.tira, 1); pintarCompras2(); });
+$('btnMaisCompra').onclick = () => {
+  const q = +$('nQtd').value, pm = +$('nPm').value;
+  if (!q || !pm || !$('nData').value) { $('nAviso').textContent = 'Preencha data, valor ou quantidade antes de guardar esta compra.'; return; }
+  compras.push({data:$('nData').value, quantidade:q, preco:pm});
+  ['nQtd','nPm','nValor'].forEach(i => $(i).value = '');
+  $('nCalc').hidden = true; $('nAviso').textContent = ''; pintarCompras2(); $('nData').focus();
+};
 $('btnCriar').onclick = async () => {
-  try { await api('/posicoes', {method:'POST', body:JSON.stringify({tipo:$('nTipo').value, identificador:$('nId').value, ativo:$('nNome').value, quantidade:+$('nQtd').value, preco_medio:+$('nPm').value, data_compra:$('nData').value, busca:$('nBusca').value, mandato:$('nMandato').value, tese:$('nTese').value})});
-    $('nova').classList.remove('aberto'); ['nId','nNome','nQtd','nPm','nBusca','nMandato','nTese'].forEach(i => $(i).value = ''); sel = null; carregarCarteira(); }
-  catch (e) { $('nAviso').textContent = e.message; }
+  if (!escolhido) { $('nAviso').textContent = 'Procure o ativo primeiro.'; return; }
+  const q = +$('nQtd').value, pm = +$('nPm').value;
+  const todas = compras.concat(q && pm && $('nData').value ? [{data:$('nData').value, quantidade:q, preco:pm}] : []);
+  if (!todas.length) { $('nAviso').textContent = 'Falta a quantidade ou o preço médio.'; return; }
+  try {
+    await api('/posicoes', {method:'POST', body:JSON.stringify({tipo:escolhido.tipo, identificador:escolhido.identificador,
+      ativo:escolhido.tipo === 'fundo' ? escolhido.ativo : (escolhido.ativo || escolhido.identificador),
+      compras:todas, busca:$('nTermos').value, mandato:$('nMandato').value, tese:$('nTese').value})});
+    $('nova').classList.remove('aberto');
+    ['nBusca','nQtd','nPm','nValor','nTermos','nMandato','nTese'].forEach(i => $(i).value = '');
+    $('nCalc').hidden = true; precoCompra = null; compras = []; pintarCompras2();
+    escolhido = null; $('nEscolhido').hidden = true; $('nAviso').textContent = ''; sel = null;
+    carregarCarteira();
+  } catch (e) { $('nAviso').textContent = e.message; }
 };
 
 async function tudo() {
-  try { regras = await api('/gatilhos/regras'); $('gRegra').innerHTML = regras.regras.map(r => `<option value="${r}">${r}</option>`).join('');
-    await Promise.all([macro(), carregarCarteira(), disparos(), operacao()]); } catch (e) { if (e.message !== 'login') console.error(e); }
+  try {
+    const regras = await api('/gatilhos/regras');
+    $('gRegra').innerHTML = regras.regras.map(r => `<option value="${r}">${esc((regras.descricoes?.[r] || r).replace(/\{\w+\}/g, '…'))}</option>`).join('');
+    await Promise.all([macro(), carregarCarteira(), disparos(), operacao()]);
+  } catch (e) { if (e.message !== 'login') console.error(e); }
 }
-tudo(); setInterval(() => { carregarCarteira(true).catch(()=>{}); operacao().catch(()=>{}); }, 60000);
+tudo();
+setInterval(() => { carregarCarteira(true).catch(()=>{}); operacao().catch(()=>{}); }, 60000);
 </script>
 </body>
 </html>

@@ -141,6 +141,10 @@ CREATE TABLE IF NOT EXISTS posicoes (
   id INTEGER PRIMARY KEY AUTOINCREMENT, ativo TEXT NOT NULL, tipo TEXT NOT NULL, mercado TEXT NOT NULL,
   identificador TEXT NOT NULL, quantidade REAL NOT NULL, preco_medio REAL NOT NULL, moeda TEXT NOT NULL,
   data_compra TEXT NOT NULL, ativa INTEGER NOT NULL DEFAULT 1, criada_em TEXT NOT NULL, atualizada_em TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS compras (
+  id INTEGER PRIMARY KEY AUTOINCREMENT, posicao_id INTEGER NOT NULL, data TEXT NOT NULL,
+  quantidade REAL NOT NULL, preco REAL NOT NULL, criada_em TEXT NOT NULL);
+CREATE INDEX IF NOT EXISTS idx_compras_posicao ON compras (posicao_id);
 CREATE TABLE IF NOT EXISTS teses (
   id INTEGER PRIMARY KEY AUTOINCREMENT, posicao_id INTEGER NOT NULL, texto TEXT NOT NULL, criada_em TEXT NOT NULL);
 CREATE TABLE IF NOT EXISTS gatilhos (
@@ -185,6 +189,11 @@ class Db:
             self._con.execute("ALTER TABLE posicoes ADD COLUMN busca TEXT NOT NULL DEFAULT ''")
         if "mandato" not in colunas:
             self._con.execute("ALTER TABLE posicoes ADD COLUMN mandato TEXT NOT NULL DEFAULT ''")
+        # Posicao existente vira a sua primeira compra, para que quantidade e preco medio passem a ser
+        # derivados das compras sem que nenhuma carteira antiga perca o que ja estava lancado.
+        self._con.execute("INSERT INTO compras (posicao_id, data, quantidade, preco, criada_em)"
+                          " SELECT id, data_compra, quantidade, preco_medio, criada_em FROM posicoes p"
+                          " WHERE NOT EXISTS (SELECT 1 FROM compras c WHERE c.posicao_id = p.id)")
         self._con.commit()
 
     @property

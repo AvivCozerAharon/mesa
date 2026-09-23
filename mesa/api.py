@@ -10,13 +10,14 @@ from fastapi import Depends, FastAPI, HTTPException, Request, Response, UploadFi
 from fastapi.responses import HTMLResponse, JSONResponse
 from pydantic import BaseModel
 
+from mesa import busca as bsc
 from mesa import gatilhos as gat
 from mesa import ia
 from mesa import job
 from mesa import noticias as noti
 from mesa.armazenamento import Consulta, Db
 from mesa.calendario import agora_brt
-from mesa.carteira import Carteira, Posicao, resumo, valorizar
+from mesa.carteira import Carteira, Posicao, resumo, somar_compras, valorizar
 from mesa.config import Config
 from mesa.fontes.yahoo import cotacao_atual
 
@@ -27,16 +28,23 @@ def _d(x) -> str:
     return pd.Timestamp(x).date().isoformat()
 
 
+class CompraIn(BaseModel):
+    data: date
+    quantidade: float
+    preco: float
+
+
 class PosicaoIn(BaseModel):
     ativo: str = ""
     tipo: str
     identificador: str
-    quantidade: float
-    preco_medio: float
-    data_compra: date
+    quantidade: float = 0            # quando vem `compras`, sai da soma delas
+    preco_medio: float = 0
+    data_compra: date | None = None
     tese: str | None = None
     busca: str = ""
     mandato: str = ""
+    compras: list[CompraIn] = []
 
 
 class TeseIn(BaseModel):
@@ -121,12 +129,20 @@ def criar_app(cfg: Config, db: Db | None = None, consulta: Consulta | None = Non
 
     @app.post("/posicoes", status_code=201, dependencies=[Depends(autenticado)])
     def criar_posicao(corpo: PosicaoIn):
+        compras = [c.model_dump() for c in corpo.compras]
+        if compras:
+            try:
+                corpo.quantidade, corpo.preco_medio, corpo.data_compra = somar_compras(compras)
+            except ValueError as e:
+                raise HTTPException(status_code=422, detail=str(e))
+        if corpo.data_compra is None:
+            raise HTTPException(status_code=422, detail="informe a data da compra")
         try:
             p = Posicao(corpo.ativo, corpo.tipo, corpo.identificador, corpo.quantidade, corpo.preco_medio, corpo.data_compra,
                         busca=corpo.busca, mandato=corpo.mandato)
         except ValueError as e:
             raise HTTPException(status_code=422, detail=str(e))
-        pid = carteira.criar(p, corpo.tese)
+        pid = carteira.criar(p, corpo.tese, compras or None)
         _termos_do_mandato(pid)
         return {**carteira.obter(pid).para_dict(), "tese": carteira.tese(pid)}
 
@@ -151,6 +167,32 @@ def criar_app(cfg: Config, db: Db | None = None, consulta: Consulta | None = Non
             raise HTTPException(status_code=404, detail="posição não encontrada")
         carteira.excluir(pid)
         return {"ok": True}
+
+    @app.get("/posicoes/{pid}/compras", dependencies=[Depends(autenticado)])
+    def listar_compras(pid: int):
+        if carteira.obter(pid) is None:
+            raise HTTPException(status_code=404, detail="posição não encontrada")
+        return carteira.compras(pid)
+
+    @app.post("/posicoes/{pid}/compras", status_code=201, dependencies=[Depends(autenticado)])
+    def nova_compra(pid: int, corpo: CompraIn):
+        try:
+            p = carteira.adicionar_compra(pid, corpo.data, corpo.quantidade, corpo.preco)
+        except KeyError:
+            raise HTTPException(status_code=404, detail="posição não encontrada")
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        return {**p.para_dict(), "compras": carteira.compras(pid)}
+
+    @app.delete("/compras/{cid}", dependencies=[Depends(autenticado)])
+    def excluir_compra(cid: int):
+        try:
+            p = carteira.remover_compra(cid)
+        except KeyError:
+            raise HTTPException(status_code=404, detail="compra não encontrada")
+        except ValueError as e:
+            raise HTTPException(status_code=422, detail=str(e))
+        return {**p.para_dict(), "compras": carteira.compras(p.id)}
 
     @app.get("/posicoes/{pid}/tese", dependencies=[Depends(autenticado)])
     def historico_tese(pid: int):
@@ -190,7 +232,20 @@ def criar_app(cfg: Config, db: Db | None = None, consulta: Consulta | None = Non
         else:
             serie = []
         return {**p.para_dict(), "tese": carteira.tese(pid), "historico_teses": carteira.historico_teses(pid),
+                "compras": carteira.compras(pid),
                 "metricas": db.metricas_recentes().get(pid), "serie": serie}
+
+    @app.get("/buscar", dependencies=[Depends(autenticado)])
+    def buscar(q: str):
+        return bsc.buscar(consulta, q)
+
+    @app.get("/cotacao", dependencies=[Depends(autenticado)])
+    def cotacao(tipo: str, identificador: str, data: date | None = None):
+        if data is None:
+            return bsc.cotacao(consulta, tipo, identificador)
+        if data > agora_brt().date():
+            raise HTTPException(status_code=422, detail="data de compra no futuro")
+        return bsc.preco_em(consulta, tipo, identificador, data, dados_dir=cfg.dados_dir)
 
     @app.get("/macro", dependencies=[Depends(autenticado)])
     def macro():

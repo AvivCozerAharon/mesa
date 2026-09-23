@@ -91,3 +91,18 @@ def cotacao_atual(tickers: list[tuple[str, str]]) -> dict[str, dict]:
         except Exception:  # noqa: BLE001
             continue
     return out
+
+
+def fechamento_em(ativo: str, mercado: str, quando, baixar=None) -> dict | None:
+    """Fechamento de um dia passado, para lançar uma compra antiga. Cai no pregão anterior se não houve."""
+    import pandas as pd
+    inicio = pd.Timestamp(quando) - pd.Timedelta(days=10)
+    df = _baixar([simbolo_yahoo(ativo, mercado)], inicio.date(), (pd.Timestamp(quando) + pd.Timedelta(days=1)).date(), baixar)
+    if df is None or df.empty:
+        return None
+    col = df["Close"] if "Close" in df.columns else df.xs("Close", axis=1, level=-1).iloc[:, 0]
+    s = pd.Series(col.values.ravel(), index=pd.to_datetime(df.index)).dropna()
+    s = s[s.index.date <= pd.Timestamp(quando).date()]
+    if s.empty:
+        return None
+    return {"preco": float(s.iloc[-1]), "data": s.index[-1].date().isoformat(), "fonte": "fechamento do Yahoo"}

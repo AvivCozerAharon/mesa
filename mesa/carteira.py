@@ -83,11 +83,21 @@ class Posicao:
         return d
 
 
+def somar_compras(compras: list[dict]) -> tuple[float, float, date]:
+    """Quantidade total, preço médio ponderado e data da primeira compra."""
+    q = sum(float(c["quantidade"]) for c in compras)
+    if not compras or q <= 0:
+        raise ValueError("as compras precisam somar mais que zero")
+    pm = sum(float(c["quantidade"]) * float(c["preco"]) for c in compras) / q
+    datas = [c["data"] if isinstance(c["data"], date) else date.fromisoformat(str(c["data"])) for c in compras]
+    return q, pm, min(datas)
+
+
 class Carteira:
     def __init__(self, db: Db):
         self._db = db
 
-    def criar(self, p: Posicao, tese: str | None = None) -> int:
+    def criar(self, p: Posicao, tese: str | None = None, compras: list[dict] | None = None) -> int:
         ts = agora_utc().isoformat()
         cur = self._db.con.execute(
             "INSERT INTO posicoes (ativo, tipo, mercado, identificador, quantidade, preco_medio, moeda, data_compra, ativa, criada_em, atualizada_em, busca, mandato)"
@@ -95,6 +105,14 @@ class Carteira:
             (p.ativo, p.tipo, p.mercado, p.identificador, p.quantidade, p.preco_medio, p.moeda, p.data_compra.isoformat(), ts, ts, p.busca or "", p.mandato or ""))
         self._db.con.commit()
         pid = cur.lastrowid
+        ts_compra = compras or [{"data": p.data_compra, "quantidade": p.quantidade, "preco": p.preco_medio}]
+        for c in ts_compra:
+            d = c["data"] if isinstance(c["data"], date) else date.fromisoformat(str(c["data"]))
+            self._db.con.execute("INSERT INTO compras (posicao_id, data, quantidade, preco, criada_em) VALUES (?,?,?,?,?)",
+                                 (pid, d.isoformat(), float(c["quantidade"]), float(c["preco"]), ts))
+        self._db.con.commit()
+        if compras:
+            self._recalcular(pid)
         if tese:
             self.definir_tese(pid, tese)
         return pid
@@ -127,6 +145,40 @@ class Carteira:
                               novo.moeda, novo.data_compra.isoformat(), agora_utc().isoformat(), novo.busca or "", novo.mandato or "", pid))
         self._db.con.commit()
         return self.obter(pid)
+
+    # --- compras: a posicao e a soma dos aportes, nao um numero digitado ---
+    def compras(self, pid: int) -> list[dict]:
+        return [dict(r) for r in self._db.con.execute(
+            "SELECT id, data, quantidade, preco FROM compras WHERE posicao_id = ? ORDER BY data, id", (pid,)).fetchall()]
+
+    def adicionar_compra(self, pid: int, quando: date, quantidade: float, preco: float) -> Posicao:
+        if quantidade <= 0 or preco <= 0:
+            raise ValueError("quantidade e preço precisam ser maiores que zero")
+        if self.obter(pid) is None:
+            raise KeyError(pid)
+        self._db.con.execute("INSERT INTO compras (posicao_id, data, quantidade, preco, criada_em) VALUES (?,?,?,?,?)",
+                             (pid, quando.isoformat(), float(quantidade), float(preco), agora_utc().isoformat()))
+        self._db.con.commit()
+        return self._recalcular(pid)
+
+    def remover_compra(self, cid: int) -> Posicao | None:
+        r = self._db.con.execute("SELECT posicao_id FROM compras WHERE id = ?", (cid,)).fetchone()
+        if r is None:
+            raise KeyError(cid)
+        pid = r["posicao_id"]
+        if len(self.compras(pid)) <= 1:
+            raise ValueError("esta é a única compra da posição — apague a posição inteira")
+        self._db.con.execute("DELETE FROM compras WHERE id = ?", (cid,))
+        self._db.con.commit()
+        return self._recalcular(pid)
+
+    def _recalcular(self, pid: int) -> Posicao:
+        """Preço médio ponderado pela quantidade; a data da posição é a da primeira compra."""
+        cs = self.compras(pid)
+        if not cs:
+            return self.obter(pid)
+        q, pm, primeira = somar_compras(cs)
+        return self.atualizar(pid, quantidade=q, preco_medio=pm, data_compra=primeira)
 
     def excluir(self, pid: int) -> None:
         self._db.con.execute("UPDATE posicoes SET ativa = 0, atualizada_em = ? WHERE id = ?", (agora_utc().isoformat(), pid))

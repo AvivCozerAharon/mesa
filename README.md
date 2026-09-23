@@ -37,9 +37,29 @@ validador e não vai pra tela.
 
 ## Interface
 
-Uma página (`mesa/static/index.html`, sem framework): faixa macro, carteira com o veredito de tese por
-posição, gráfico com preço médio e média de 200, números, briefing e tese editável (com histórico),
-notícias, gatilhos, painel "Hoje" e operação. `j`/`k` navega. Em produção: http://<ec2>:8100 (senha única).
+Uma página (`mesa/static/index.html`, sem framework), pensada como um caderno de teses: cada posição é
+uma linha com a marca do dia na margem (✓ de pé, ? revisar, — sem elementos), e a mesma marca aparece
+ao lado da tese que a IA conferiu. Tem faixa macro, gráfico com preço médio e média de 200, números,
+fundamentos, notícias, gatilhos, o painel "Hoje" e a operação. `j`/`k` navega, `n` lança posição.
+Em produção: http://<ec2>:8100 (senha única).
+
+### Lançar posição
+
+Buscar por nome em vez de decorar código: `/buscar` junta ticker (busca do Yahoo, filtrada para B3 e
+bolsas americanas, com o tipo deduzido do sufixo — 11 é FII ou ETF, 31–39 é BDR), fundo por nome ou
+CNPJ (36 mil classes do cadastro CVM, maior PL primeiro) e título do Tesouro (das curvas já baixadas).
+Cada fonte falha sozinha: sem Yahoo, fundo e Tesouro continuam.
+
+Uma compra se lança por **data + quanto você pôs**; `/cotacao?data=` acha o preço daquele dia — cota no
+informe diário da CVM (os zips mensais já estão em cache pelo job), PU na curva do Tesouro, fechamento
+guardado ou, para papel novo, no Yahoo — e daí sai a quantidade. Dia sem pregão cai no anterior, e a UI
+diz de que dia veio o preço.
+
+### Compras, não um número digitado
+
+A posição é a soma dos seus aportes (tabela `compras`): quantidade é a soma e preço médio é a média
+ponderada, recalculados a cada compra adicionada ou apagada. A data da posição é a da primeira compra.
+Carteiras criadas antes disso migram sozinhas — cada posição vira a sua primeira compra.
 
 ## Rodar
 
@@ -106,6 +126,9 @@ $//' .env` resolveu.
     para a tela e para a IA.
 
 ## Limites conhecidos
+
+- Open Finance não entra: puxar dados por lá exige ser instituição autorizada pelo Banco Central e estar
+  no diretório de participantes (ou pagar um agregador). A carteira entra por CSV ou pela tela.
 
 - **"Tese continua?" é uma leitura, não uma medição.** Mesma carteira, mesmo dia, conjuntos de notícias
   coletados em horas diferentes deram vereditos diferentes para VOO e PETR4. O que é estável: o
