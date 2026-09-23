@@ -70,6 +70,15 @@ alguma posição, e os preços que importam — índices e câmbio, a curva
 de juros brasileira e a americana com a variação em pontos-base no mês, e as suas posições. Atualiza a
 cada dois minutos. É escuro mesmo no tema claro: ali se varre de longe, não se lê.
 
+### Série nova sem esperar o job
+
+Fundo recém-lançado não tem cota nenhuma no Parquet (o informe da CVM só é filtrado para os CNPJ da
+carteira) e ticker novo só ganha preço no fechamento — a posição apareceria "sem preço" por horas.
+Ao criar a posição, o servidor busca em segundo plano só o que falta para ela (13 meses de informe,
+que bastam para as métricas de 12 meses; o job da manhã completa os 36) e recalcula. A tela mostra o
+andamento e tem um botão para repetir. Lançar a mesma posição duas vezes é recusado com 409: o que
+se quer ali é uma compra nova na posição que já existe.
+
 ### Compras, não um número digitado
 
 A posição é a soma dos seus aportes (tabela `compras`): quantidade é a soma e preço médio é a média

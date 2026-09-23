@@ -448,7 +448,10 @@ async function selecionar(id) {
       <span class="fraco" style="font-size:13px">${TIPO[a.tipo]} · ${esc(a.identificador)}</span></div>
     <div class="linhafina">${fmt(a.quantidade, 0)} × ${fmt(a.preco_medio, casas)} desde ${a.data_compra} ·
       vale ${fmt(p.valor_brl,0)} R$ · <span class="${cls(p.pnl_brl)}">${p.pnl_brl>0?'+':''}${fmt(p.pnl_brl,0)} (${pct(p.pnl_pct)})</span>
-      · ${p.data_preco ? 'preço de ' + p.data_preco : 'sem preço hoje'}</div>`;
+      · ${p.data_preco ? 'preço de ' + p.data_preco : 'sem preço hoje'}</div>
+    ${p.preco == null ? `<div class="acoes" id="semSerie"><span class="aviso">Ainda não há série coletada para esta posição.</span>
+      <button id="btnColetar">Buscar série agora</button><span class="fraco" id="coletaStatus" style="font-size:13px"></span></div>` : ''}`;
+  if (p.preco == null) ligarColeta(id);
   desenhar(a);
 
   const r = m.retornos || {}, b = m.bench_retornos || {}, dd = m.drawdown || {}, s52 = m.s52 || {}, met = [];
@@ -519,6 +522,28 @@ async function selecionar(id) {
   pintarCompras(a);
   $('eResumo').value = `${fmt(a.quantidade, a.tipo === 'fundo' ? 4 : 0)} × ${fmt(a.preco_medio, casas)} — vem das compras`;
   $('eBusca').value = a.busca || ''; $('eMandato').value = a.mandato || ''; $('eAviso').textContent = '';
+}
+
+async function ligarColeta(id) {
+  const status = $('coletaStatus'), botao = $('btnColetar');
+  if (!status) return;
+  const estado = (await api(`/posicoes/${id}/coletar`).catch(() => ({}))).estado;
+  if (estado === 'buscando') return acompanharColeta(id);
+  if (estado && estado.startsWith('erro')) status.textContent = estado;
+  botao.onclick = async () => { await api(`/posicoes/${id}/coletar`, {method:'POST'}); acompanharColeta(id); };
+}
+function acompanharColeta(id) {
+  const status = $('coletaStatus'), botao = $('btnColetar');
+  if (!status) return;
+  botao.disabled = true;
+  status.textContent = 'buscando na CVM — leva menos de um minuto…';
+  const relogio = setInterval(async () => {
+    const e = (await api(`/posicoes/${id}/coletar`).catch(() => ({}))).estado;
+    if (e === 'buscando') return;
+    clearInterval(relogio);
+    if (e === 'pronto') { await carregarCarteira(); await selecionar(id); }
+    else { botao.disabled = false; status.textContent = e || 'não deu certo; tente de novo'; }
+  }, 3000);
 }
 
 function pintarCompras(a) {
@@ -789,6 +814,7 @@ $('btnCriar').onclick = async () => {
   const q = +$('nQtd').value, pm = +$('nPm').value;
   const todas = compras.concat(q && pm && $('nData').value ? [{data:$('nData').value, quantidade:q, preco:pm}] : []);
   if (!todas.length) { $('nAviso').textContent = 'Falta a quantidade ou o preço médio.'; return; }
+  const ident = escolhido.identificador;
   try {
     await api('/posicoes', {method:'POST', body:JSON.stringify({tipo:escolhido.tipo, identificador:escolhido.identificador,
       ativo:escolhido.tipo === 'fundo' ? escolhido.ativo : (escolhido.ativo || escolhido.identificador),
@@ -797,7 +823,9 @@ $('btnCriar').onclick = async () => {
     ['nBusca','nQtd','nPm','nValor','nTermos','nMandato','nTese'].forEach(i => $(i).value = '');
     $('nCalc').hidden = true; precoCompra = null; compras = []; pintarCompras2();
     escolhido = null; $('nEscolhido').hidden = true; $('nAviso').textContent = ''; sel = null;
-    carregarCarteira();
+    await carregarCarteira();
+    const nova = (carteira.posicoes || []).find(x => x.identificador === ident);
+    if (nova) selecionar(nova.id);
   } catch (e) { $('nAviso').textContent = e.message; }
 };
 

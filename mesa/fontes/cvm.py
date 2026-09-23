@@ -104,8 +104,17 @@ def parse_lamina(zip_bytes: bytes, data_ref: str) -> pd.DataFrame:
     return out[out["cnpj"].str.len() == 14].drop_duplicates("cnpj", keep="last")
 
 
+COLUNAS_INFORME = ["CNPJ_FUNDO_CLASSE", "CNPJ_FUNDO", "ID_SUBCLASSE", "DT_COMPTC", "VL_QUOTA",
+                   "VL_PATRIM_LIQ", "CAPTC_DIA", "RESG_DIA", "NR_COTST"]
+
+
 def parse_informe(csv_bytes: bytes, cnpjs: set[str]) -> pd.DataFrame:
-    df = pd.read_csv(io.BytesIO(csv_bytes), sep=";", dtype=str, encoding="latin-1")
+    # Só as colunas usadas e com os números já parseados pelo C: o arquivo tem 350 mil linhas por mês
+    # e são 36 meses por coleta.
+    cabecalho = pd.read_csv(io.BytesIO(csv_bytes), sep=";", nrows=0, encoding="latin-1").columns
+    usar = [c for c in COLUNAS_INFORME if c in cabecalho]
+    texto = {c: "string" for c in ("CNPJ_FUNDO_CLASSE", "CNPJ_FUNDO", "ID_SUBCLASSE", "DT_COMPTC") if c in usar}
+    df = pd.read_csv(io.BytesIO(csv_bytes), sep=";", encoding="latin-1", usecols=usar, dtype=texto)
     col = "CNPJ_FUNDO_CLASSE" if "CNPJ_FUNDO_CLASSE" in df.columns else "CNPJ_FUNDO"
     df["cnpj"] = df[col].map(so_digitos)
     df = df[df["cnpj"].isin(cnpjs)]
@@ -171,8 +180,9 @@ class InformeDiario:
     nome = "cvm_informe"
     tabela = "cotas_fundos"
 
-    def __init__(self, cadastro_fn=None):
+    def __init__(self, cadastro_fn=None, meses: int | None = None):
         self._cadastro_fn = cadastro_fn  # () -> DataFrame do cadastro (para escolher pares)
+        self._meses = meses              # menos meses = coleta sob demanda mais rapida
 
     def coletar(self, ctx: Contexto) -> tuple[pd.DataFrame, Coleta]:
         cnpjs = [so_digitos(c) for c in ctx.cnpjs]
@@ -186,7 +196,7 @@ class InformeDiario:
         pasta = os.path.join(ctx.dados_dir, "cvm", "raw")
         os.makedirs(pasta, exist_ok=True)
         get = http_get(ctx)
-        partes, baixados, meses = [], 0, meses_ate(ctx.agora.date(), ctx.meses_cvm)
+        partes, baixados, meses = [], 0, meses_ate(ctx.agora.date(), self._meses or ctx.meses_cvm)
         for aaaamm in meses:
             caminho = os.path.join(pasta, f"inf_diario_fi_{aaaamm}.zip")
             corrente = aaaamm == meses[-1]

@@ -64,6 +64,7 @@ def criar_app(cfg: Config, db: Db | None = None, consulta: Consulta | None = Non
     app.state.cliente_ia = None  # injetavel nos testes
     sessoes: set[str] = set()
     trava_job = threading.Lock()
+    coletando: dict[int, str] = {}  # posicao -> estado da coleta sob demanda
     cache_cotacao = {"em": None, "dados": {}}
     cache_bench = {"em": None, "dados": {}}
 
@@ -136,6 +137,21 @@ def criar_app(cfg: Config, db: Db | None = None, consulta: Consulta | None = Non
             base = [p.identificador] if p.mercado in ("B3", "US") else []
             carteira.atualizar(pid, busca=";".join(base + termos))
 
+    def _coletar_em_fundo(pid: int) -> None:
+        """Série de uma posição nova em segundo plano: ler 13 meses de informe leva ~25 s e não pode
+        segurar a resposta do POST."""
+        def tarefa():
+            with trava_job:
+                try:
+                    r = job.coletar_posicao(cfg, pid)
+                    coletando[pid] = "pronto"
+                    log.info("coleta sob demanda de %s: %s", r["ativo"], r["coletas"])
+                except Exception as e:  # noqa: BLE001 - a posicao continua la, so sem serie
+                    coletando[pid] = f"erro: {e}"
+                    log.exception("coleta sob demanda da posicao %s falhou", pid)
+        coletando[pid] = "buscando"
+        threading.Thread(target=tarefa, name=f"coleta-{pid}", daemon=True).start()
+
     @app.get("/posicoes", dependencies=[Depends(autenticado)])
     def listar_posicoes():
         return [{**p.para_dict(), "tese": carteira.tese(p.id)} for p in carteira.listar()]
@@ -155,9 +171,14 @@ def criar_app(cfg: Config, db: Db | None = None, consulta: Consulta | None = Non
                         busca=corpo.busca, mandato=corpo.mandato)
         except ValueError as e:
             raise HTTPException(status_code=422, detail=str(e))
+        ja = next((x for x in carteira.listar() if x.identificador == p.identificador), None)
+        if ja is not None:
+            # Duas posições do mesmo ativo duplicam notícia, gatilho e briefing; o que ele quer é um aporte.
+            raise HTTPException(status_code=409, detail=f"{ja.ativo} já está na carteira — adicione uma compra a ela")
         pid = carteira.criar(p, corpo.tese, compras or None)
         _termos_do_mandato(pid)
-        return {**carteira.obter(pid).para_dict(), "tese": carteira.tese(pid)}
+        _coletar_em_fundo(pid)
+        return {**carteira.obter(pid).para_dict(), "tese": carteira.tese(pid), "coleta": coletando.get(pid)}
 
     @app.put("/posicoes/{pid}", dependencies=[Depends(autenticado)])
     def atualizar_posicao(pid: int, corpo: dict):
@@ -173,6 +194,19 @@ def criar_app(cfg: Config, db: Db | None = None, consulta: Consulta | None = Non
             _termos_do_mandato(pid, forcar=bool(corpo.get("gerar_termos")))
         p = carteira.obter(pid)
         return {**p.para_dict(), "tese": carteira.tese(pid)}
+
+    @app.post("/posicoes/{pid}/coletar", dependencies=[Depends(autenticado)])
+    def coletar_posicao(pid: int):
+        if carteira.obter(pid) is None:
+            raise HTTPException(status_code=404, detail="posição não encontrada")
+        if coletando.get(pid) == "buscando":
+            return {"estado": "buscando"}
+        _coletar_em_fundo(pid)
+        return {"estado": coletando.get(pid)}
+
+    @app.get("/posicoes/{pid}/coletar", dependencies=[Depends(autenticado)])
+    def estado_coleta(pid: int):
+        return {"estado": coletando.get(pid)}
 
     @app.delete("/posicoes/{pid}", dependencies=[Depends(autenticado)])
     def excluir_posicao(pid: int):

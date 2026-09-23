@@ -1,3 +1,4 @@
+import time
 from datetime import date, datetime
 from zoneinfo import ZoneInfo
 
@@ -151,3 +152,54 @@ def test_cotacoes_isola_simbolo_quebrado():
 
     r = cotacoes({"SP500": "^GSPC", "X": "^QUEBRA"}, ticker_factory=Fake)
     assert list(r) == ["SP500"] and r["SP500"]["preco"] == 7764.64
+
+
+def test_coletar_posicao_busca_so_o_que_falta(ambiente, monkeypatch):
+    """Posição nova não espera o job da manhã: a coleta sob demanda cobre só aquela posição."""
+    cfg, db, cart, _ = ambiente
+    chamadas = []
+
+    def falso_coletar(cfg_, db_, fontes, ctx):
+        chamadas.append(([f.nome for f in fontes], list(ctx.cnpjs), list(ctx.tickers)))
+        return []
+
+    monkeypatch.setattr(job, "coletar", falso_coletar)
+    pid = cart.criar(Posicao("", "fundo", "22.215.116/0001-80:ABC123", 10, 3.0, date(2026, 1, 2)))
+    job.coletar_posicao(cfg, pid)
+    fontes, cnpjs, tickers = chamadas[-1]
+    assert cnpjs == ["22215116000180"] and tickers == []   # sem a subclasse: a CVM publica por CNPJ
+    assert "cvm_informe" in fontes and "yahoo" not in fontes
+
+    acao = cart.criar(Posicao("", "acao", "WEGE3", 10, 30.0, date(2026, 1, 2)))
+    job.coletar_posicao(cfg, acao)
+    fontes, cnpjs, tickers = chamadas[-1]
+    assert tickers == [("WEGE3", "B3")] and cnpjs == [] and set(fontes) == {"yahoo", "fundamentos"}
+
+    with pytest.raises(KeyError):
+        job.coletar_posicao(cfg, 9999)
+
+
+def test_criar_posicao_dispara_coleta_e_expoe_o_estado(ambiente, monkeypatch):
+    cfg = ambiente[0]
+    feitas = []
+    monkeypatch.setattr(job, "coletar_posicao", lambda c, pid, meses=13: feitas.append(pid) or {"ativo": "X", "coletas": []})
+    cli = TestClient(criar_app(cfg))
+    r = cli.post("/posicoes", json={"tipo": "acao", "identificador": "WEGE3", "quantidade": 10,
+                                    "preco_medio": 30.0, "data_compra": "2026-01-02"})
+    assert r.status_code == 201 and r.json()["coleta"] in ("buscando", "pronto")
+    pid = r.json()["id"]
+    for _ in range(50):
+        if cli.get(f"/posicoes/{pid}/coletar").json()["estado"] != "buscando":
+            break
+        time.sleep(0.05)
+    assert feitas == [pid] and cli.get(f"/posicoes/{pid}/coletar").json()["estado"] == "pronto"
+
+
+def test_nao_duplica_posicao_do_mesmo_ativo(ambiente, monkeypatch):
+    cfg = ambiente[0]
+    monkeypatch.setattr(job, "coletar_posicao", lambda c, pid, meses=13: {"ativo": "X", "coletas": []})
+    cli = TestClient(criar_app(cfg))
+    corpo = {"tipo": "acao", "identificador": "WEGE3", "quantidade": 10, "preco_medio": 30.0, "data_compra": "2026-01-02"}
+    assert cli.post("/posicoes", json=corpo).status_code == 201
+    r = cli.post("/posicoes", json=corpo)
+    assert r.status_code == 409 and "adicione uma compra" in r.json()["detail"]

@@ -4,6 +4,7 @@ Cada etapa é idempotente por (fonte, data): rodar duas vezes no mesmo dia sobre
 Parquet. Uma fonte com erro é registrada em `coletas` e as outras seguem — nunca derruba o job.
 """
 import logging
+from dataclasses import replace
 from datetime import date, datetime
 
 import pandas as pd
@@ -212,6 +213,37 @@ def pares_do_fundo(consulta: Consulta, cnpj: str, info) -> pd.DataFrame | None:
     tabela.index = pd.to_datetime(tabela.index)
     # fundos publicam a cota com atraso diferente (D+1, D+2): sem ffill a ultima linha e quase toda NaN
     return tabela.sort_index().ffill()
+
+
+def coletar_posicao(cfg: Config, pid: int, meses: int = 13) -> dict:
+    """Busca a série de uma posição recém-lançada, sem esperar o job da manhã.
+
+    Fundo novo não tem cota nenhuma no Parquet (o informe só é filtrado para os CNPJ da carteira),
+    e ticker novo só ganha preço no fechamento — nos dois casos a posição apareceria "sem preço" por
+    horas. Aqui cobre-se só o que falta para aquela posição: 13 meses de cota bastam para as métricas
+    de 12 meses, e o job da manhã completa os 36 depois.
+    """
+    db, consulta = Db(cfg.db_path), Consulta(cfg.dados_dir)
+    carteira = Carteira(db)
+    p = carteira.obter(pid)
+    if p is None:
+        raise KeyError(pid)
+    ctx = contexto(cfg, carteira)
+    if p.tipo == "fundo":
+        cnpj = partes_fundo(p.identificador)[0]
+        fontes = [InformeDiario(meses=meses), Cadastro(), Lamina()]
+        ctx = replace(ctx, cnpjs=[cnpj], tickers=[])
+    elif p.mercado in ("B3", "US"):
+        fontes = [Yahoo(incluir_benchmarks=False)]
+        ctx = replace(ctx, tickers=[(p.identificador, p.mercado)], cnpjs=[])
+        if p.tipo in ("acao", "acao_us", "bdr"):
+            fontes.append(Fundamentos({p.identificador: p.tipo}))
+    else:
+        fontes = [TesouroDireto()]
+        ctx = replace(ctx, tickers=[], cnpjs=[])
+    coletas = coletar(cfg, db, fontes, ctx)
+    calculo = calcular(cfg, db, consulta, carteira, ctx.agora)
+    return {"ativo": p.ativo, "coletas": coletas, "calculadas": calculo["calculadas"]}
 
 
 def _etapa(db: Db, nome: str, hoje: date, fn) -> dict:
